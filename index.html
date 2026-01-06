@@ -4,18 +4,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>nuuanu | Seeding Management Tool</title>
-    <!-- 외부 라이브러리 CDN - 순서 중요: React -> ReactDOM -> PropTypes -> Recharts -->
+    
+    <!-- External Libraries (CDN) -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     
-    <!-- Lucide Icons (React 버전) -->
+    <!-- Lucide Icons (UMD) -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://unpkg.com/lucide-react@latest"></script>
     
-    <!-- Recharts (UMD 버전) -->
+    <!-- Recharts (UMD) -->
     <script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
     
     <style>
@@ -28,6 +29,7 @@
             color: #1a1a1a;
             margin: 0;
             padding: 0;
+            overflow-x: hidden;
         }
 
         /* Luxury Scrollbar */
@@ -45,15 +47,6 @@
             transition: width 0.5s ease-in-out, background-color 0.3s;
         }
 
-        /* Table truncate */
-        .table-truncate {
-            max-width: 100px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        
-        /* Mobile 2-column grid */
         .product-grid {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
@@ -65,48 +58,38 @@
                 gap: 2.5rem;
             }
         }
+        
+        input, textarea, select {
+            border-radius: 0 !important;
+        }
     </style>
-<script type="importmap">
-{
-  "imports": {
-    "react": "https://esm.sh/react@^19.2.3",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "react/": "https://esm.sh/react@^19.2.3/",
-    "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
-    "recharts": "https://esm.sh/recharts@^3.6.0"
-  }
-}
-</script>
 </head>
 <body>
     <div id="root"></div>
 
     <script type="text/babel">
-        // 글로벌 변수 매핑 - 라이브러리 이름 대소문자 주의
-        const LucideLib = window.LucideReact || window.lucideReact || window.Lucide || window.lucide;
-        const RechartsLib = window.Recharts;
-
-        if (!LucideLib) console.error("Lucide library not found. Check CDN links.");
-        if (!RechartsLib) console.error("Recharts library not found. Check CDN links.");
-
+        // Mapping global variables from CDN
         const { useState, useEffect, useRef, useLayoutEffect, useMemo } = React;
-        
-        // Lucide Icons
+        const Lucide = window.LucideReact || {};
+        const RechartsLib = window.Recharts || {};
+
         const { 
             ShoppingBag, LogOut, Settings, Package, Truck, BarChart3, 
             Plus, ChevronRight, ChevronLeft, X, Upload, Download, 
             Trash2, Copy, CheckCircle2, CheckSquare, Square, Search 
-        } = LucideLib || {};
+        } = Lucide;
 
-        // Recharts Components
         const { 
             BarChart, Bar, XAxis, YAxis, CartesianGrid, 
             Tooltip: RechartsTooltip, ResponsiveContainer, Cell 
-        } = RechartsLib || {};
+        } = RechartsLib;
 
-        // --- Constants & Utils ---
+        // Fallback for icons to prevent Error #130 if library fails to load
+        const Icon = ({ name: Comp, ...props }) => Comp ? <Comp {...props} /> : null;
+
+        // --- Constants & Utilities ---
         const MAX_STORAGE_MB = 5;
-        const STORAGE_KEY = 'nuuanu_unified_state';
+        const STORAGE_KEY = 'nuuanu_unified_state_v4';
 
         const generateId = () => Math.random().toString(36).substr(2, 9);
 
@@ -149,23 +132,14 @@
             if (data.length === 0) return;
             const headers = ["instagram ID", "이름", "전화번호", "받는분기타연락처", "받는분우편번호", "주소", "제품명", "사이즈", "수량", "배송메세지1"];
             const csvRows = [headers.join(',')];
-            
             data.forEach(item => {
                 const escape = (val) => `"${String(val || "").replace(/"/g, '""')}"`;
-                const row = [
-                    escape(item.instagramId),
-                    escape(item.name),
-                    escape(item.phone),
-                    escape(""), escape(""),
-                    escape(item.address),
-                    escape(item.productName),
-                    escape(item.size),
-                    escape(item.quantity || 1),
-                    escape(item.message)
-                ];
-                csvRows.push(row.join(','));
+                csvRows.push([
+                    escape(item.instagramId), escape(item.name), escape(item.phone),
+                    escape(""), escape(""), escape(item.address),
+                    escape(item.productName), escape(item.size), escape(1), escape(item.message)
+                ].join(','));
             });
-
             const blob = new Blob(["\uFEFF" + csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
@@ -173,7 +147,7 @@
             link.click();
         };
 
-        // --- UI Components ---
+        // --- Components ---
 
         const Toast = ({ error, success }) => {
             if (error) return (
@@ -196,15 +170,165 @@
                     <span className={percent > 90 ? 'text-red-500' : 'text-black'}>{percent.toFixed(1)}%</span>
                 </div>
                 <div className="w-full bg-gray-100 h-1 rounded-full overflow-hidden">
-                    <div 
-                        className={`storage-bar h-full ${percent > 90 ? 'bg-red-500' : 'bg-black'}`} 
-                        style={{ width: `${Math.min(percent, 100)}%` }} 
-                    />
+                    <div className={`storage-bar h-full ${percent > 90 ? 'bg-red-500' : 'bg-black'}`} style={{ width: `${Math.min(percent, 100)}%` }} />
                 </div>
             </div>
         );
 
-        // --- Main App Logic ---
+        const AdminDashboard = ({ collection, onUpdate, onBack, activeSubView, setSubView, notify, adminAccessCode, updateAdminCode, usagePercent, onDelete, error, success }) => {
+            const [selectedEntries, setSelectedEntries] = useState(new Set());
+            const handleUpdate = (u) => { onUpdate({ ...collection, ...u }); notify('Saved Successfully', 'success'); };
+
+            return (
+                <div className="min-h-screen bg-white flex flex-col animate-fade-in">
+                    <header className="border-b border-gray-100 py-6 px-10 flex justify-between items-center bg-white sticky top-0 z-40 backdrop-blur-md bg-white/90">
+                        <div className="flex items-center space-x-10">
+                            <button onClick={onBack} className="text-[10px] uppercase tracking-[0.3em] flex items-center hover:text-gray-400 font-bold group">
+                                <Icon name={ChevronLeft} size={16} className="mr-1 group-hover:-translate-x-1 transition-transform" /> Back
+                            </button>
+                            <h2 className="text-xs font-bold tracking-[0.4em] uppercase">{collection.name}</h2>
+                        </div>
+                        <nav className="flex space-x-12">
+                            {[
+                                {id:'settings', label:'Settings', icon:Settings},
+                                {id:'products', label:'Products', icon:Package},
+                                {id:'shipping', label:'Shipping', icon:Truck},
+                                {id:'report', label:'Report', icon:BarChart3}
+                            ].map(tab => (
+                                <button key={tab.id} onClick={() => setSubView(tab.id)} className={`flex items-center space-x-2 text-[10px] uppercase tracking-[0.3em] py-1 ${activeSubView === tab.id ? 'text-black font-bold border-b border-black' : 'text-gray-400 hover:text-black'}`}>
+                                    <Icon name={tab.icon} size={14} /> <span className="hidden md:inline">{tab.label}</span>
+                                </button>
+                            ))}
+                        </nav>
+                    </header>
+                    <main className="flex-1 p-10 overflow-auto">
+                        {activeSubView === 'settings' && (
+                            <div className="max-w-3xl mx-auto space-y-16 py-10">
+                                <section className="space-y-8">
+                                    <h3 className="text-[10px] font-bold uppercase tracking-[0.4em] border-b pb-4">Global Configuration</h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                                        <div className="space-y-2">
+                                            <label className="text-[9px] text-gray-400 uppercase font-bold tracking-widest">Admin Access Code</label>
+                                            <input type="text" className="w-full border-b py-2 focus:border-black outline-none text-xs" value={adminAccessCode} onChange={e => updateAdminCode(e.target.value)} />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-[9px] text-gray-400 uppercase font-bold tracking-widest">Collection Entry Code</label>
+                                            <input type="text" className="w-full border-b py-2 focus:border-black outline-none text-xs" value={collection.accessCode} onChange={e => handleUpdate({ accessCode: e.target.value })} />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-[9px] text-gray-400 uppercase font-bold tracking-widest">Item Selection Limit</label>
+                                            <input type="number" className="w-full border-b py-2 focus:border-black outline-none text-xs" value={collection.maxProducts} onChange={e => handleUpdate({ maxProducts: parseInt(e.target.value) || 1 })} />
+                                        </div>
+                                    </div>
+                                </section>
+                                <section className="space-y-8">
+                                    <h3 className="text-[10px] font-bold uppercase tracking-[0.4em] border-b pb-4">Story & Details</h3>
+                                    <input placeholder="TITLE" className="w-full text-3xl font-light tracking-widest border-b py-4 outline-none focus:border-black" value={collection.descriptionTitle} onChange={e => handleUpdate({ descriptionTitle: e.target.value })} />
+                                    <textarea placeholder="CONTENT" className="w-full h-48 border p-8 text-xs font-light outline-none focus:border-black leading-relaxed" value={collection.descriptionBody} onChange={e => handleUpdate({ descriptionBody: e.target.value })} />
+                                </section>
+                                <section className="space-y-8">
+                                    <h3 className="text-[10px] font-bold uppercase tracking-[0.4em] border-b pb-4">Lookbook Images (1:1.5)</h3>
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
+                                        {collection.lookbookImages.map((img, i) => (
+                                            <div key={i} className="relative aspect-[1/1.5] group bg-gray-50 border overflow-hidden shadow-sm">
+                                                <img src={img} className="w-full h-full object-cover" />
+                                                <button onClick={() => { const next = [...collection.lookbookImages]; next.splice(i, 1); handleUpdate({ lookbookImages: next }); }} className="absolute top-2 right-2 bg-white/80 p-2 opacity-0 group-hover:opacity-100 shadow-xl"><Icon name={X} size={14}/></button>
+                                            </div>
+                                        ))}
+                                        <label className="aspect-[1/1.5] border-2 border-dashed flex flex-col items-center justify-center cursor-pointer hover:border-black transition-all group">
+                                            <Icon name={Upload} size={24} className="text-gray-200 group-hover:text-black" />
+                                            <input type="file" multiple className="hidden" onChange={async e => { if(e.target.files) { const news = []; for(const f of Array.from(e.target.files)) { news.push(await compressImage(f)); } handleUpdate({ lookbookImages: [...collection.lookbookImages, ...news] }); } }} />
+                                        </label>
+                                    </div>
+                                </section>
+                                <div className="pt-20 text-center"><button onClick={onDelete} className="text-red-400 text-[9px] uppercase font-bold px-12 py-4 bg-red-50 rounded-full hover:bg-red-100">Delete Entire Collection</button></div>
+                            </div>
+                        )}
+                        {activeSubView === 'products' && (
+                            <div className="max-w-5xl mx-auto space-y-12">
+                                <div className="flex justify-between items-end border-b pb-6">
+                                    <h3 className="text-[10px] font-bold uppercase tracking-[0.4em]">Product Catalog</h3>
+                                    <button onClick={() => { const next = [...collection.products, { id: generateId(), name: 'New Item', price: '0', options: ['OS'], description: '', images: [] }]; handleUpdate({ products: next }); }} className="bg-black text-white px-8 py-3 text-[9px] uppercase font-bold"><Icon name={Plus} size={14} className="mr-2 inline" /> Add Product</button>
+                                </div>
+                                <div className="grid gap-12">
+                                    {collection.products.map(p => (
+                                        <div key={p.id} className="border p-10 flex flex-col xl:flex-row gap-12 bg-white hover:shadow-xl transition-all">
+                                            <div className="flex-1 grid gap-8 md:grid-cols-2">
+                                                <input className="w-full border-b py-2 focus:border-black outline-none text-xs font-bold" placeholder="Product Name" value={p.name} onChange={e => { const next = collection.products.map(x => x.id === p.id ? {...x, name: e.target.value} : x); onUpdate({...collection, products: next}); }} />
+                                                <input className="w-full border-b py-2 focus:border-black outline-none text-xs" placeholder="Price" value={p.price} onChange={e => { const next = collection.products.map(x => x.id === p.id ? {...x, price: e.target.value} : x); onUpdate({...collection, products: next}); }} />
+                                                <input className="col-span-2 w-full border-b py-2 focus:border-black outline-none text-xs" placeholder="Sizes (e.g. 1, 2, 3)" value={p.options.join(',')} onChange={e => { const next = collection.products.map(x => x.id === p.id ? {...x, options: e.target.value.split(',')} : x); onUpdate({...collection, products: next}); }} />
+                                                <textarea className="col-span-2 w-full h-32 border p-4 focus:border-black outline-none text-xs" placeholder="Product Details" value={p.description} onChange={e => { const next = collection.products.map(x => x.id === p.id ? {...x, description: e.target.value} : x); onUpdate({...collection, products: next}); }} />
+                                            </div>
+                                            <div className="xl:w-64 space-y-4">
+                                                <div className="grid grid-cols-3 gap-2">
+                                                    {p.images.map((img, i) => (
+                                                        <div key={i} className="aspect-[2/3] relative group border overflow-hidden shadow-sm"><img src={img} className="w-full h-full object-cover"/><button onClick={() => { const ni = [...p.images]; ni.splice(i, 1); const np = collection.products.map(x => x.id === p.id ? {...x, images: ni} : x); onUpdate({...collection, products: np}); }} className="absolute top-1 right-1 bg-white p-1 opacity-0 group-hover:opacity-100 shadow"><Icon name={X} size={10}/></button></div>
+                                                    ))}
+                                                    <label className="aspect-[2/3] border border-dashed flex items-center justify-center cursor-pointer hover:border-black transition-colors"><Icon name={Plus} size={14}/><input type="file" multiple className="hidden" onChange={async e => { if(e.target.files) { const news = []; for(const f of Array.from(e.target.files)) { news.push(await compressImage(f)); } const np = collection.products.map(x => x.id === p.id ? {...x, images: [...p.images, ...news]} : x); onUpdate({...collection, products: np}); } }} /></label>
+                                                </div>
+                                                <button onClick={() => { if(confirm('Remove this product?')) onUpdate({...collection, products: collection.products.filter(x => x.id !== p.id)}); }} className="text-red-400 text-[9px] uppercase font-bold w-full pt-4 border-t">Remove Item</button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                        {activeSubView === 'shipping' && (
+                            <div className="space-y-10">
+                                <div className="flex justify-between items-end border-b pb-6"><h3 className="text-[10px] font-bold uppercase tracking-[0.4em]">Seeding Status</h3><button onClick={() => downloadCSV(`${collection.name}_shipments.csv`, collection.shippingEntries)} className="text-[9px] font-bold uppercase border border-black px-8 py-3 hover:bg-black hover:text-white transition-all">Export CSV</button></div>
+                                <div className="overflow-x-auto border rounded-sm"><table className="w-full text-left text-[11px]"><thead className="bg-gray-50 uppercase text-[8px] tracking-[0.4em] text-gray-400 border-b"><tr><th className="p-6 w-12 text-center">Sel</th><th className="p-6">Status</th><th className="p-6">Influencer</th><th className="p-6">Product</th><th className="p-6 text-right">Actions</th></tr></thead><tbody className="divide-y divide-gray-50">{collection.shippingEntries.map(e => (
+                                    <tr key={e.id} className="hover:bg-gray-50/50 group"><td className="p-6 text-center"><button onClick={() => { const next = new Set(selectedEntries); if(next.has(e.id)) next.delete(e.id); else next.add(e.id); setSelectedEntries(next); }} className="text-gray-300">{selectedEntries.has(e.id) ? <Icon name={CheckSquare} size={16} className="text-black"/> : <Icon name={Square} size={16}/>}</button></td><td className="p-6"><select className={`text-[9px] px-3 py-2 border rounded-sm font-bold uppercase tracking-widest outline-none bg-white ${e.status === '배송완료' ? 'text-green-600 border-green-100 bg-green-50' : 'text-orange-600 border-orange-100 bg-orange-50'}`} value={e.status} onChange={val => { const next = collection.shippingEntries.map(x => x.id === e.id ? {...x, status: val.target.value} : x); onUpdate({...collection, shippingEntries: next}); }}><option value="준비중">준비중</option><option value="배송완료">배송완료</option></select></td><td className="p-6 font-bold uppercase"><div>@{e.instagramId}</div><div className="text-[10px] text-gray-400 lowercase">{e.name} / {e.phone}</div></td><td className="p-6"><div>{e.productName}</div><div className="text-[9px] text-gray-400 uppercase tracking-widest font-bold">Size: {e.size}</div></td><td className="p-6 text-right"><div className="flex justify-end space-x-3 opacity-0 group-hover:opacity-100 transition-all"><button onClick={()=>{ const c={...e, id: generateId(), submitDate:'추가 제품', productName:'', size:''}; handleUpdate({shippingEntries:[...collection.shippingEntries, c]}); }}><Icon name={Copy} size={16}/></button><button onClick={() => { if(confirm('Delete record?')) onUpdate({...collection, shippingEntries: collection.shippingEntries.filter(x => x.id !== e.id)}); }} className="text-red-300 hover:text-red-500"><Icon name={Trash2} size={16}/></button></div></td></tr>
+                                ))}</tbody></table></div>
+                            </div>
+                        )}
+                        {activeSubView === 'report' && (
+                            <div className="max-w-6xl mx-auto space-y-16">
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-10"><div className="bg-white p-12 border shadow-sm text-center space-y-3"><p className="text-[10px] text-gray-400 uppercase font-bold tracking-[0.3em]">Total Entries</p><p className="text-5xl font-light">{collection.shippingEntries.length}</p></div><div className="bg-white p-12 border shadow-sm text-center space-y-3"><p className="text-[10px] text-gray-400 uppercase font-bold tracking-[0.3em]">Influencer Requests</p><p className="text-5xl font-light">{collection.shippingEntries.filter(s => s.submitDate !== '추가 제품').length}</p></div><div className="bg-white p-12 border shadow-sm text-center space-y-3"><p className="text-[10px] text-gray-400 uppercase font-bold tracking-[0.3em]">Completion Rate</p><p className="text-5xl font-light">{collection.shippingEntries.length ? Math.round((collection.shippingEntries.filter(s => s.status === '배송완료').length / collection.shippingEntries.length) * 100) : 0}%</p></div></div>
+                                {BarChart && (
+                                    <div className="bg-white p-12 border h-[500px] shadow-sm"><h3 className="text-[11px] font-bold uppercase tracking-[0.5em] mb-12 border-b pb-6">Product Popularity</h3><ResponsiveContainer width="100%" height="80%"><BarChart data={Object.values(collection.shippingEntries.reduce((acc, curr) => { if (!curr.productName) return acc; const n = curr.productName.toUpperCase(); acc[n] = acc[n] || { name: n, count: 0 }; acc[n].count += 1; return acc; }, {}))}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f5f5f5" /><XAxis dataKey="name" tick={{fontSize: 9, fill:'#999'}} axisLine={false} tickLine={false}/><YAxis tick={{fontSize: 9, fill:'#999'}} axisLine={false} tickLine={false}/><RechartsTooltip cursor={{fill: '#fafafa'}}/><Bar dataKey="count" fill="#000" radius={[2, 2, 0, 0]} /></BarChart></ResponsiveContainer></div>
+                                )}
+                            </div>
+                        )}
+                    </main>
+                    <StorageMonitor percent={usagePercent} />
+                    <Toast error={error} success={success} />
+                </div>
+            );
+        };
+
+        const InfluencerPage = ({ collection, cart, setCart, onLogout, notify, onSubmission, scrollPosRef, error, success }) => {
+            const [view, setView] = useState('lookbook');
+            const [activeSlide, setActiveSlide] = useState(0);
+            const [selectedProd, setSelectedProd] = useState(null);
+            const [selectedSize, setSelectedSize] = useState('');
+            const [formData, setFormData] = useState({ instagramId: '', name: '', phone: '', address: '', message: '', extra: '', agreed: false });
+            
+            useLayoutEffect(() => { if (view === 'lookbook' && scrollPosRef.current > 0) setTimeout(() => window.scrollTo({ top: scrollPosRef.current, behavior: 'instant' }), 0); }, [view]);
+            const handleNav = (v) => { if (view === 'lookbook') scrollPosRef.current = window.scrollY; setView(v); window.scrollTo(0, 0); };
+            
+            const next = () => { if(!collection.lookbookImages.length) return; setActiveSlide(p => (p + 2) >= collection.lookbookImages.length ? 0 : p + 2); };
+            const prev = () => { if(!collection.lookbookImages.length) return; setActiveSlide(p => p - 2 < 0 ? Math.max(0, collection.lookbookImages.length - (collection.lookbookImages.length % 2 || 2)) : p - 2); };
+            const addToCart = () => { if(!selectedProd || !selectedSize) { alert('Select size preference'); return; } if(cart.length >= collection.maxProducts) { alert(`Selection limit: ${collection.maxProducts} items.`); return; } setCart([...cart, { id: generateId(), productName: selectedProd.name, size: selectedSize, image: selectedProd.images[0] || 'https://picsum.photos/400/600' }]); notify('Added to selection', 'success'); handleNav('lookbook'); };
+            const submit = () => { if(!formData.instagramId || !formData.name || !formData.phone || !formData.address || !formData.agreed) { alert('Check required fields'); return; } onSubmission(cart.map(item => ({ id: generateId(), status: '준비중', submitDate: new Date().toISOString().split('T')[0], ...formData, productName: item.productName, size: item.size, quantity: 1, adminMemo: '' }))); setView('success'); setCart([]); };
+
+            if (view === 'success') return (<div className="min-h-screen flex flex-col items-center justify-center p-12 text-center space-y-12 animate-fade-in"><Icon name={CheckCircle2} size={80} strokeWidth={1}/><h2 className="text-2xl font-light tracking-[0.4em] uppercase">Complete</h2><p className="text-sm font-light text-gray-400 max-w-sm">Thank you, nuuanu girl! We love having you as part of our journey✨</p><button onClick={onLogout} className="text-[10px] tracking-[0.5em] border-b border-black pb-1 uppercase font-bold">Sign Out</button></div>);
+
+            return (
+                <div className="min-h-screen bg-white pb-40 animate-fade-in">
+                    <header className="px-10 py-10 sticky top-0 bg-white/95 backdrop-blur-md z-40 flex justify-between items-center border-b border-gray-50"><h1 className="text-2xl font-light tracking-[0.5em] uppercase cursor-pointer" onClick={() => handleNav('lookbook')}>nuuanu</h1><div className="flex items-center space-x-12"><button onClick={() => handleNav('cart')} className="relative flex items-center space-x-3 text-[10px] tracking-widest font-bold group"><Icon name={ShoppingBag} size={22} strokeWidth={1} />{cart.length > 0 && <span className="absolute -top-3 -right-3 bg-black text-white text-[8px] w-5 h-5 rounded-full flex items-center justify-center border-2 border-white font-bold">{cart.length}</span>}</button><button onClick={onLogout} className="text-gray-300 hover:text-black transition-colors"><Icon name={LogOut} size={22} strokeWidth={1}/></button></div></header>
+                    {view === 'lookbook' && (
+                        <main className="animate-fade-in"><section className="relative mb-40 px-6 sm:px-10 py-20"><div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-10 max-w-7xl mx-auto">{collection.lookbookImages.length > 0 ? (<><div className="aspect-[1/1.5] bg-gray-50 shadow-2xl overflow-hidden"><img src={collection.lookbookImages[activeSlide]} className="w-full h-full object-cover" /></div><div className="hidden md:block aspect-[1/1.5] bg-gray-50 shadow-2xl overflow-hidden"><img src={collection.lookbookImages[activeSlide+1] || collection.lookbookImages[0]} className="w-full h-full object-cover" /></div></>) : (<div className="col-span-2 aspect-[2/1.5] bg-gray-50 flex items-center justify-center text-[10px] tracking-widest text-gray-300">LOOKBOOK COMING SOON</div>)}</div>{collection.lookbookImages.length > 2 && (<div className="absolute top-1/2 -translate-y-1/2 left-0 w-full flex justify-between px-4 sm:px-16 pointer-events-none"><button onClick={prev} className="pointer-events-auto bg-white/50 p-6 rounded-full shadow-2xl hover:bg-white transition-all"><Icon name={ChevronLeft} size={28} strokeWidth={1}/></button><button onClick={next} className="pointer-events-auto bg-white/50 p-6 rounded-full shadow-2xl hover:bg-white transition-all"><Icon name={ChevronRight} size={28} strokeWidth={1}/></button></div>)}</section><section className="max-w-2xl mx-auto text-center mb-52 px-10 space-y-12"><h2 className="text-2xl font-light tracking-[0.5em] uppercase border-b border-gray-100 pb-10 inline-block">{collection.descriptionTitle}</h2><div className="text-sm font-light leading-relaxed tracking-[0.2em] text-gray-400" dangerouslySetInnerHTML={{ __html: collection.descriptionBody.replace(/\n/g, '<br/>') }} /></section><section className="max-w-6xl mx-auto px-10"><div className="flex justify-between items-end border-b border-gray-50 pb-10 mb-20"><div><h3 className="text-[12px] font-bold uppercase tracking-[0.5em]">The Selection</h3></div><p className="text-[10px] text-gray-400 uppercase tracking-[0.4em] font-bold">Limit: {cart.length} / {collection.maxProducts}</p></div><div className="product-grid">{collection.products.map(p => (<div key={p.id} className="group cursor-pointer" onClick={() => { setSelectedProd(p); handleNav('product_detail'); }}><div className="aspect-[2/3] bg-gray-50 mb-8 overflow-hidden relative shadow-lg transition-all duration-1000"><img src={p.images[0] || 'https://picsum.photos/seed/nuuanu/400/600'} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-[2000ms]" /><div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-all duration-700" /><div className="absolute bottom-8 left-1/2 -translate-x-1/2 translate-y-6 group-hover:translate-y-0 opacity-0 group-hover:opacity-100 transition-all duration-700"><span className="bg-white px-10 py-3 text-[10px] tracking-[0.5em] uppercase font-bold shadow-2xl">View Details</span></div></div><div className="space-y-2"><h4 className="text-[11px] font-bold tracking-[0.3em] uppercase">{p.name}</h4><p className="text-[10px] text-gray-300 uppercase tracking-widest">KRW {p.price}</p></div></div>))}</div></section></main>
+                    )}
+                    {view === 'product_detail' && selectedProd && (
+                        <main className="max-w-6xl mx-auto px-10 pt-16 animate-fade-in"><button onClick={() => handleNav('lookbook')} className="text-[11px] tracking-[0.4em] uppercase mb-24 flex items-center hover:text-gray-400 font-bold"><Icon name={ChevronLeft} size={18} className="mr-1" strokeWidth={1} /> Collection</button><div className="grid grid-cols-1 lg:grid-cols-2 gap-32"><div className="space-y-10"><div className="aspect-[2/3] bg-gray-50 shadow-2xl overflow-hidden"><img src={selectedProd.images[0] || 'https://picsum.photos/400/600'} className="w-full h-full object-cover" /></div><div className="grid grid-cols-4 gap-6">{selectedProd.images.slice(1).map((img, i) => (<div key={i} className="aspect-[2/3] bg-gray-50 border border-gray-100 shadow-xl overflow-hidden"><img src={img} className="w-full h-full object-cover" /></div>))}</div></div><div className="space-y-20"><div className="space-y-6 border-b pb-12 border-gray-100"><h2 className="text-5xl font-light tracking-[0.3em] uppercase">{selectedProd.name}</h2><p className="text-gray-300 tracking-[0.5em] text-sm uppercase">Selection Reference: KRW {selectedProd.price}</p></div><div className="text-sm leading-relaxed text-gray-400 font-light" dangerouslySetInnerHTML={{ __html: (selectedProd.description || '').replace(/\n/g, '<br/>') }} /><div className="space-y-10"><p className="text-[11px] tracking-[0.5em] uppercase font-bold">Size Preference</p><div className="flex flex-wrap gap-5">{selectedProd.options.map(s => (<button key={s} onClick={() => setSelectedSize(s)} className={`min-w-[100px] py-4 border tracking-[0.4em] text-[11px] font-bold transition-all ${selectedSize === s ? 'bg-black text-white border-black shadow-2xl scale-110' : 'border-gray-200 hover:border-black'}`}>{s}</button>))}</div></div><div className="pt-10"><button onClick={addToCart} className="w-full bg-black text-white py-8 text-[11px] tracking-[0.6em] font-bold shadow-2xl active:scale-[0.98] uppercase">Add to My Selection</button></div></div></div></main>
+                    )}
+                    {view === 'cart' && (
+                        <main className="max-w-2xl mx-auto px-10 pt-16 animate-fade-in"><button onClick={() => handleNav('lookbook')} className="text-[11px] tracking-[0.4em] uppercase mb-24 flex items-center hover:text-gray-400 font-bold"><Icon name={ChevronLeft} size={18} className="mr-1" strokeWidth={1} /> Back</button><div className="flex justify-between items-end border-b pb-10 mb-20 border-gray-100"><h2 className="text-xs font-bold uppercase tracking-[0.5em]">Selected List</h2><p className="text-[10px] text-gray-300 font-bold">{cart.length} / {collection.maxProducts}</p></div><div className="space-y-16 mb-32">{cart.map((item, i) => (<div key={i} className="flex space-x-10 items-center group"><div className="w-28 aspect-[2/3] bg-gray-50 shadow-2xl overflow-hidden"><img src={item.image} className="w-full h-full object-cover" /></div><div className="flex-1"><h4 className="text-[12px] font-bold uppercase tracking-[0.3em] mb-3">{item.productName}</h4><p className="text-[10px] text-gray-400 tracking-[0.4em] uppercase">Size: <span className="text-black ml-2 font-bold">{item.size}</span></p></div><button onClick={() => setCart(cart.filter((_, idx) => idx !== i))} className="text-gray-200 hover:text-red-500 transition-all duration-500 p-4"><Icon name={X} size={24} strokeWidth={1}/></button></div>))}</div><div className="bg-gray-50 p-12 space-y-16 shadow-2xl rounded-sm border border-gray-100"><h3 className="text-[11px] font-bold uppercase tracking-[0.5em] border-b pb-8 border-gray-200">Shipping Information</h3><div className="space-y-10"><div className="grid grid-cols-1 sm:grid-cols-2 gap-10"><input placeholder="INSTAGRAM (@)" className="w-full border-b border-gray-200 bg-transparent py-5 text-[11px] outline-none uppercase" value={formData.instagramId} onChange={e => setFormData({...formData, instagramId: e.target.value})} /><input placeholder="NAME" className="w-full border-b border-gray-200 bg-transparent py-5 text-[11px] outline-none uppercase" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} /></div><div className="grid grid-cols-1 sm:grid-cols-2 gap-10"><input placeholder="PHONE" className="w-full border-b border-gray-200 bg-transparent py-5 text-[11px] outline-none uppercase" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} /><input placeholder="ADDRESS" className="w-full border-b border-gray-200 bg-transparent py-5 text-[11px] outline-none uppercase" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} /></div><textarea placeholder="MESSAGE" className="w-full h-32 border-b border-gray-200 bg-transparent py-5 text-[11px] outline-none resize-none uppercase" value={formData.message} onChange={e => setFormData({...formData, message: e.target.value})} /><label className="flex items-start space-x-6 cursor-pointer group"><div className="mt-1" onClick={() => setFormData({...formData, agreed: !formData.agreed})}>{formData.agreed ? <Icon name={CheckSquare} size={20} className="text-black" /> : <Icon name={Square} size={20} className="text-gray-300 transition-colors" />}</div><span className="text-[9px] text-gray-500 leading-relaxed font-light">*재고 상황 등에 따라 일부 내용이 달라질 수 있으며, 올려주신 콘텐츠는 브랜드 소개나 홍보에 활용될 수 있음에 동의합니다.</span></label><button onClick={submit} className="w-full bg-black text-white py-8 text-[11px] tracking-[0.6em] font-bold shadow-2xl disabled:opacity-20 uppercase" disabled={!cart.length || !formData.agreed}>Confirm Seeding</button></div></div></main>
+                    )}
+                    <Toast error={error} success={success} />
+                </div>
+            );
+        };
 
         const App = () => {
             const [state, setState] = useState(() => {
@@ -222,12 +346,9 @@
             const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
             const [newCollectionName, setNewCollectionName] = useState('');
             const [adminSubView, setAdminSubView] = useState('settings');
-            
             const scrollPosRef = useRef(0);
 
-            useEffect(() => {
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-            }, [state]);
+            useEffect(() => { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }, [state]);
 
             const notify = (msg, type) => {
                 if (type === 'success') { setSuccess(msg); setTimeout(() => setSuccess(null), 3000); }
@@ -236,77 +357,24 @@
 
             const handleLogin = () => {
                 const code = accessCodeInput.trim().toLowerCase();
-                if (code === state.adminAccessCode.toLowerCase()) {
-                    setCurrentUser('admin');
-                    setView('select_collection');
-                } else {
+                if (code === state.adminAccessCode.toLowerCase()) { setCurrentUser('admin'); setView('select_collection'); }
+                else {
                     const matched = state.collections.find(c => c.accessCode.toLowerCase() === code);
-                    if (matched) {
-                        setActiveCollection(matched);
-                        setCurrentUser('influencer');
-                        setView('influencer');
-                    } else {
-                        notify('Invalid Access Code', 'error');
-                    }
+                    if (matched) { setActiveCollection(matched); setCurrentUser('influencer'); setView('influencer'); }
+                    else { notify('Invalid Access Code', 'error'); }
                 }
             };
 
-            const handleLogout = () => {
-                setCurrentUser(null);
-                setActiveCollection(null);
-                setView('login');
-                setAccessCodeInput('');
-                setCart([]);
-                scrollPosRef.current = 0;
-            };
-
-            const updateCollection = (updated) => {
-                const next = state.collections.map(c => c.id === updated.id ? updated : c);
-                setState({ ...state, collections: next });
-                setActiveCollection(updated);
-            };
-
-            const createCollection = () => {
-                const name = newCollectionName.trim();
-                if (!name) return;
-                if (parseFloat(getStorageUsage()) >= MAX_STORAGE_MB * 0.95) {
-                    notify('Storage Full', 'error');
-                    return;
-                }
-                const newColl = {
-                    id: generateId(),
-                    name,
-                    accessCode: generateId().substring(0, 6),
-                    maxProducts: 2,
-                    lookbookImages: [],
-                    descriptionTitle: 'Collection Story',
-                    descriptionBody: 'Share the inspiration behind this season.',
-                    products: [],
-                    shippingEntries: []
-                };
-                setState({ ...state, collections: [...state.collections, newColl] });
-                setActiveCollection(newColl);
-                setView('admin');
-                setAdminSubView('settings');
-                setIsCreateModalOpen(false);
-                setNewCollectionName('');
-                notify(`Created "${name}"`, 'success');
-            };
-
+            const handleLogout = () => { setCurrentUser(null); setActiveCollection(null); setView('login'); setAccessCodeInput(''); setCart([]); scrollPosRef.current = 0; };
+            const updateCollection = (updated) => { const next = state.collections.map(c => c.id === updated.id ? updated : c); setState({ ...state, collections: next }); setActiveCollection(updated); };
             const usagePercent = (parseFloat(getStorageUsage()) / MAX_STORAGE_MB) * 100;
 
             if (view === 'login') return (
-                <div className="min-h-screen flex items-center justify-center p-6 bg-white selection:bg-black selection:text-white">
-                    <div className="max-w-md w-full text-center space-y-20 animate-fade-in">
+                <div className="min-h-screen flex items-center justify-center p-6 bg-white selection:bg-black selection:text-white animate-fade-in">
+                    <div className="max-w-md w-full text-center space-y-20">
                         <h1 className="text-6xl font-light tracking-[0.4em] uppercase">nuuanu</h1>
                         <div className="space-y-6">
-                            <input 
-                                type="text" placeholder="ACCESS CODE" 
-                                className="w-full border-b border-gray-200 py-4 text-center focus:outline-none focus:border-black tracking-[0.3em] uppercase text-sm bg-transparent transition-colors"
-                                value={accessCodeInput} onChange={e => setAccessCodeInput(e.target.value)}
-                                onKeyDown={e => e.key === 'Enter' && handleLogin()}
-                                autoFocus
-                            />
+                            <input type="text" placeholder="ACCESS CODE" className="w-full border-b border-gray-200 py-4 text-center focus:outline-none focus:border-black tracking-[0.3em] uppercase text-sm bg-transparent transition-colors" value={accessCodeInput} onChange={e => setAccessCodeInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleLogin()} autoFocus />
                             <button onClick={handleLogin} className="w-full bg-black text-white py-5 text-[10px] tracking-[0.5em] uppercase hover:bg-gray-800 transition-all font-bold">Entrance</button>
                         </div>
                     </div>
@@ -317,38 +385,33 @@
             if (view === 'select_collection') return (
                 <div className="min-h-screen bg-white p-10 sm:p-20 animate-fade-in">
                     <div className="max-w-6xl mx-auto space-y-16">
-                        <div className="flex justify-between items-end border-b border-gray-100 pb-10">
-                            <div>
-                                <h2 className="text-[10px] tracking-[0.4em] uppercase text-gray-400 mb-2">Workspace</h2>
-                                <h1 className="text-4xl font-light tracking-widest uppercase">Collections</h1>
-                            </div>
-                            <button onClick={handleLogout} className="text-[10px] tracking-[0.3em] uppercase border-b border-black pb-1 hover:text-gray-400 hover:border-gray-400 transition-colors">Logout</button>
-                        </div>
+                        <div className="flex justify-between items-end border-b border-gray-100 pb-10"><div><h2 className="text-[10px] tracking-[0.4em] uppercase text-gray-400 mb-2">Management Console</h2><h1 className="text-4xl font-light tracking-widest uppercase">Collections</h1></div><button onClick={handleLogout} className="text-[10px] uppercase tracking-[0.3em] border-b border-black pb-1 hover:text-gray-400 hover:border-gray-400 transition-colors">Logout</button></div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
                             {state.collections.map(c => (
                                 <div key={c.id} onClick={() => { setActiveCollection(c); setAdminSubView('settings'); setView('admin'); }} className="group border border-gray-100 p-12 hover:border-black transition-all cursor-pointer flex flex-col items-center justify-center space-y-6 aspect-square bg-white shadow-sm hover:shadow-xl">
-                                    <div className="w-16 h-16 bg-gray-50 flex items-center justify-center rounded-full group-hover:bg-black group-hover:text-white transition-all"><Package size={24} strokeWidth={1}/></div>
-                                    <div className="text-center">
-                                        <h3 className="text-xs font-bold tracking-widest uppercase mb-1">{c.name}</h3>
-                                        <p className="text-[9px] text-gray-400 uppercase tracking-tighter">Enter Code: {c.accessCode}</p>
-                                    </div>
+                                    <div className="w-16 h-16 bg-gray-50 flex items-center justify-center rounded-full group-hover:bg-black group-hover:text-white transition-all"><Icon name={Package} size={24}/></div>
+                                    <div className="text-center font-bold tracking-widest uppercase text-xs">{c.name}</div>
                                 </div>
                             ))}
-                            <button onClick={() => setIsCreateModalOpen(true)} className="border border-dashed border-gray-200 p-12 hover:border-black hover:bg-gray-50 transition-all flex flex-col items-center justify-center space-y-6 aspect-square group">
-                                <div className="w-16 h-16 bg-gray-50 flex items-center justify-center rounded-full text-gray-300 group-hover:text-black transition-all"><Plus size={24} strokeWidth={1}/></div>
-                                <p className="text-[10px] tracking-[0.3em] uppercase font-bold text-gray-300 group-hover:text-black">Create New</p>
-                            </button>
+                            <button onClick={() => setIsCreateModalOpen(true)} className="border border-dashed border-gray-200 p-12 hover:border-black hover:bg-gray-50 flex flex-col items-center justify-center space-y-6 aspect-square group text-gray-300 hover:text-black transition-all"><Icon name={Plus} size={24}/><span className="text-[10px] uppercase font-bold">New Catalog</span></button>
                         </div>
                     </div>
                     {isCreateModalOpen && (
-                        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm px-6" onClick={() => setIsCreateModalOpen(false)}>
+                        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 px-6 backdrop-blur-sm" onClick={() => setIsCreateModalOpen(false)}>
                             <div className="bg-white p-12 w-full max-w-sm shadow-2xl space-y-12 animate-fade-in" onClick={e => e.stopPropagation()}>
-                                <div className="flex justify-between items-center border-b pb-4 border-gray-100">
-                                    <h3 className="text-xs font-bold uppercase tracking-widest">Add Collection</h3>
-                                    <button onClick={() => setIsCreateModalOpen(false)}><X size={18} strokeWidth={1}/></button>
-                                </div>
-                                <input autoFocus type="text" placeholder="COLLECTION NAME" className="w-full border-b border-gray-200 py-4 text-center focus:outline-none focus:border-black uppercase tracking-widest text-sm bg-transparent" value={newCollectionName} onChange={e => setNewCollectionName(e.target.value)} onKeyDown={e => e.key === 'Enter' && createCollection()} />
-                                <button onClick={createCollection} className="w-full bg-black text-white py-5 text-[10px] tracking-[0.4em] uppercase font-bold hover:bg-gray-800 transition-colors">Confirm</button>
+                                <h3 className="text-xs font-bold uppercase border-b pb-4 text-center tracking-widest">Create New Seeding Catalog</h3>
+                                <input autoFocus type="text" placeholder="NAME" className="w-full border-b border-gray-200 py-4 text-center focus:border-black outline-none uppercase text-sm tracking-widest" value={newCollectionName} onChange={e => setNewCollectionName(e.target.value)} onKeyDown={e => e.key === 'Enter' && (()=>{
+                                    if(!newCollectionName.trim()) return;
+                                    const newColl = { id: generateId(), name: newCollectionName.trim(), accessCode: generateId().substring(0, 6), maxProducts: 2, lookbookImages: [], descriptionTitle: 'New Story', descriptionBody: 'Collection inspiration...', products: [], shippingEntries: [] };
+                                    setState({...state, collections: [...state.collections, newColl]});
+                                    setIsCreateModalOpen(false); setNewCollectionName(''); notify('Collection Created', 'success');
+                                })()}/>
+                                <button onClick={()=>{
+                                    if(!newCollectionName.trim()) return;
+                                    const newColl = { id: generateId(), name: newCollectionName.trim(), accessCode: generateId().substring(0, 6), maxProducts: 2, lookbookImages: [], descriptionTitle: 'New Story', descriptionBody: 'Collection inspiration...', products: [], shippingEntries: [] };
+                                    setState({...state, collections: [...state.collections, newColl]});
+                                    setIsCreateModalOpen(false); setNewCollectionName(''); notify('Collection Created', 'success');
+                                }} className="w-full bg-black text-white py-5 text-[10px] uppercase font-bold tracking-[0.4em]">Confirm Create</button>
                             </div>
                         </div>
                     )}
@@ -362,164 +425,12 @@
             );
 
             if (view === 'influencer' && activeCollection) return (
-                <InfluencerPage collection={activeCollection} cart={cart} setCart={setCart} onLogout={handleLogout} notify={notify} scrollPosRef={scrollPosRef} onSubmission={entries => { updateCollection({...activeCollection, shippingEntries: [...activeCollection.shippingEntries, ...entries]}); }} />
+                <InfluencerPage collection={activeCollection} cart={cart} setCart={setCart} onLogout={handleLogout} notify={notify} scrollPosRef={scrollPosRef} onSubmission={entries => { updateCollection({...activeCollection, shippingEntries: [...activeCollection.shippingEntries, ...entries]}); }} error={error} success={success} />
             );
 
             return null;
         };
 
-        const AdminDashboard = ({ collection, onUpdate, onBack, activeSubView, setSubView, notify, adminAccessCode, updateAdminCode, usagePercent, onDelete }) => {
-            const [selectedEntries, setSelectedEntries] = useState(new Set());
-            const handleUpdate = (u) => { onUpdate({ ...collection, ...u }); notify('Changes Saved', 'success'); };
-            const handleBulkExport = () => {
-                const list = selectedEntries.size > 0 ? collection.shippingEntries.filter(e => selectedEntries.has(e.id)) : collection.shippingEntries;
-                downloadCSV(`${collection.name}_seeding_list.csv`, list);
-                notify(`Exported ${list.length} rows`, 'success');
-            };
-
-            return (
-                <div className="min-h-screen bg-white flex flex-col animate-fade-in">
-                    <header className="border-b border-gray-100 py-6 px-10 flex justify-between items-center bg-white/90 backdrop-blur-md sticky top-0 z-40">
-                        <div className="flex items-center space-x-10">
-                            <button onClick={onBack} className="text-[10px] uppercase tracking-[0.3em] flex items-center hover:text-gray-400 transition-colors font-bold group">
-                                <ChevronLeft size={16} className="mr-1 group-hover:-translate-x-1 transition-transform" strokeWidth={1} /> Back
-                            </button>
-                            <h2 className="text-xs font-bold tracking-[0.4em] uppercase border-l pl-10 border-gray-100">{collection.name}</h2>
-                        </div>
-                        <nav className="flex items-center space-x-12">
-                            {[{id:'settings',label:'Basic',icon:Settings},{id:'products',label:'Products',icon:Package},{id:'shipping',label:'Shipping',icon:Truck},{id:'report',label:'Report',icon:BarChart3}].map(tab => (
-                                <button key={tab.id} onClick={() => setSubView(tab.id)} className={`flex items-center space-x-2 text-[10px] uppercase tracking-[0.3em] transition-all relative py-1 ${activeSubView === tab.id ? 'text-black font-bold' : 'text-gray-400 hover:text-black'}`}>
-                                    <tab.icon size={14} strokeWidth={activeSubView === tab.id ? 2 : 1} />
-                                    <span className="hidden lg:inline">{tab.label}</span>
-                                    {activeSubView === tab.id && <div className="absolute -bottom-1 left-0 right-0 h-0.5 bg-black" />}
-                                </button>
-                            ))}
-                        </nav>
-                    </header>
-                    <main className="flex-1 p-10 overflow-auto">
-                        {activeSubView === 'settings' && (
-                            <div className="max-w-3xl mx-auto space-y-16 py-10">
-                                <section className="space-y-8">
-                                    <h3 className="text-[10px] font-bold uppercase tracking-[0.4em] border-b pb-4 border-gray-100">Access Management</h3>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                                        <div className="space-y-2">
-                                            <label className="text-[9px] text-gray-400 uppercase tracking-widest font-bold">Admin Code (Global)</label>
-                                            <input type="text" className="w-full border-b border-gray-100 py-2 focus:border-black outline-none tracking-widest text-xs bg-transparent" value={adminAccessCode} onChange={e => updateAdminCode(e.target.value)} />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <label className="text-[9px] text-gray-400 uppercase tracking-widest font-bold">Entrance Code (Collection)</label>
-                                            <input type="text" className="w-full border-b border-gray-100 py-2 focus:border-black outline-none tracking-widest text-xs bg-transparent" value={collection.accessCode} onChange={e => handleUpdate({ accessCode: e.target.value })} />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <label className="text-[9px] text-gray-400 uppercase tracking-widest font-bold">Max Products per User</label>
-                                            <input type="number" className="w-full border-b border-gray-100 py-2 focus:border-black outline-none tracking-widest text-xs bg-transparent" value={collection.maxProducts} onChange={e => handleUpdate({ maxProducts: parseInt(e.target.value) || 1 })} />
-                                        </div>
-                                    </div>
-                                </section>
-                                <section className="space-y-8">
-                                    <h3 className="text-[10px] font-bold uppercase tracking-[0.4em] border-b pb-4 border-gray-100">Presentation</h3>
-                                    <input placeholder="TITLE" className="w-full text-3xl font-light tracking-widest border-b border-gray-100 py-4 outline-none focus:border-black bg-transparent" value={collection.descriptionTitle} onChange={e => handleUpdate({ descriptionTitle: e.target.value })} />
-                                    <textarea placeholder="STORY CONTENT" className="w-full h-48 border border-gray-100 p-8 text-xs font-light tracking-widest outline-none focus:border-black leading-relaxed bg-transparent" value={collection.descriptionBody} onChange={e => handleUpdate({ descriptionBody: e.target.value })} />
-                                </section>
-                                <section className="space-y-8">
-                                    <h3 className="text-[10px] font-bold uppercase tracking-[0.4em] border-b pb-4 border-gray-100">Lookbook Images</h3>
-                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
-                                        {collection.lookbookImages.map((img, i) => (
-                                            <div key={i} className="relative aspect-[1/1.5] group bg-gray-50 border border-gray-100 overflow-hidden shadow-sm">
-                                                <img src={img} className="w-full h-full object-cover" />
-                                                <button onClick={() => { const next = [...collection.lookbookImages]; next.splice(i, 1); handleUpdate({ lookbookImages: next }); }} className="absolute top-3 right-3 bg-white/80 p-2 rounded-full opacity-0 group-hover:opacity-100 transition-all shadow-xl"><X size={14}/></button>
-                                            </div>
-                                        ))}
-                                        <label className="aspect-[1/1.5] border-2 border-dashed border-gray-100 flex flex-col items-center justify-center cursor-pointer hover:border-black transition-all">
-                                            <Upload size={24} strokeWidth={1} />
-                                            <input type="file" multiple className="hidden" onChange={async e => { if(e.target.files) { const news = []; for(const f of Array.from(e.target.files)) { news.push(await compressImage(f)); } handleUpdate({ lookbookImages: [...collection.lookbookImages, ...news] }); } }} />
-                                        </label>
-                                    </div>
-                                </section>
-                                <div className="pt-20 text-center"><button onClick={onDelete} className="text-red-400 text-[9px] uppercase tracking-[0.4em] hover:text-red-600 font-bold px-12 py-4 bg-red-50 rounded-full">Delete Collection</button></div>
-                            </div>
-                        )}
-                        {activeSubView === 'products' && (
-                            <div className="max-w-5xl mx-auto space-y-12">
-                                <div className="flex justify-between items-end border-b pb-8 border-gray-100">
-                                    <h3 className="text-[10px] font-bold uppercase tracking-[0.4em]">Seasonal Catalog</h3>
-                                    <button onClick={() => { const next = [...collection.products, { id: generateId(), name: 'New Item', price: '0', options: ['OS'], description: '', images: [] }]; handleUpdate({ products: next }); }} className="bg-black text-white px-10 py-4 text-[9px] uppercase tracking-[0.3em] font-bold shadow-xl"><Plus size={16} className="mr-2 inline" /> Add Product</button>
-                                </div>
-                                <div className="grid gap-12">
-                                    {collection.products.map(p => (
-                                        <div key={p.id} className="border border-gray-100 p-10 flex flex-col xl:flex-row gap-12 bg-white">
-                                            <div className="flex-1 grid gap-10 md:grid-cols-2">
-                                                <input className="w-full border-b border-gray-100 py-2 outline-none focus:border-black text-xs" placeholder="Name" value={p.name} onChange={e => { const next = collection.products.map(x => x.id === p.id ? {...x, name: e.target.value} : x); onUpdate({...collection, products: next}); }} />
-                                                <input className="w-full border-b border-gray-100 py-2 outline-none focus:border-black text-xs" placeholder="Price" value={p.price} onChange={e => { const next = collection.products.map(x => x.id === p.id ? {...x, price: e.target.value} : x); onUpdate({...collection, products: next}); }} />
-                                                <input className="col-span-2 w-full border-b border-gray-100 py-2 outline-none focus:border-black text-xs" placeholder="Sizes (S, M, L...)" value={p.options.join(',')} onChange={e => { const next = collection.products.map(x => x.id === p.id ? {...x, options: e.target.value.split(',')} : x); onUpdate({...collection, products: next}); }} />
-                                                <textarea className="col-span-2 w-full h-40 border border-gray-100 p-4 outline-none focus:border-black text-xs" placeholder="Description" value={p.description} onChange={e => { const next = collection.products.map(x => x.id === p.id ? {...x, description: e.target.value} : x); onUpdate({...collection, products: next}); }} />
-                                            </div>
-                                            <div className="xl:w-80 space-y-4">
-                                                <div className="grid grid-cols-3 gap-2">
-                                                    {p.images.map((img, i) => (
-                                                        <div key={i} className="aspect-[2/3] relative group border border-gray-100 overflow-hidden shadow-sm"><img src={img} className="w-full h-full object-cover"/><button onClick={() => { const ni = [...p.images]; ni.splice(i, 1); const np = collection.products.map(x => x.id === p.id ? {...x, images: ni} : x); onUpdate({...collection, products: np}); }} className="absolute top-1 right-1 bg-white p-1 opacity-0 group-hover:opacity-100"><X size={10}/></button></div>
-                                                    ))}
-                                                    <label className="aspect-[2/3] border border-dashed border-gray-100 flex items-center justify-center cursor-pointer hover:border-black transition-all"><Plus size={14}/><input type="file" multiple className="hidden" onChange={async e => { if(e.target.files) { const news = []; for(const f of Array.from(e.target.files)) { news.push(await compressImage(f)); } const np = collection.products.map(x => x.id === p.id ? {...x, images: [...p.images, ...news]} : x); onUpdate({...collection, products: np}); } }} /></label>
-                                                </div>
-                                                <button onClick={() => { if(confirm('Delete?')) onUpdate({...collection, products: collection.products.filter(x => x.id !== p.id)}); }} className="text-red-400 text-[9px] uppercase font-bold w-full pt-4">Delete Item</button>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                                <div className="sticky bottom-10 flex justify-center pb-10"><button onClick={() => notify('Synchronized', 'success')} className="bg-black text-white px-24 py-6 text-[11px] tracking-[0.5em] font-bold">Final Save</button></div>
-                            </div>
-                        )}
-                        {activeSubView === 'shipping' && (
-                            <div className="space-y-10 animate-fade-in">
-                                <div className="flex justify-between items-end border-b pb-8 border-gray-100"><h3 className="text-[10px] font-bold uppercase tracking-[0.4em]">Seeding List</h3><button onClick={handleBulkExport} className="border border-black px-10 py-4 text-[9px] font-bold hover:bg-black hover:text-white transition-all"><Download size={14} className="mr-2 inline" /> Export {selectedEntries.size > 0 ? `(${selectedEntries.size})` : '(All)'}</button></div>
-                                <div className="overflow-x-auto border border-gray-100"><table className="w-full text-left text-[11px]"><thead className="bg-gray-50 border-y border-gray-100 uppercase text-[8px] tracking-[0.4em] text-gray-400"><tr className="bg-gray-50"><th className="p-6 w-12 text-center"><button onClick={() => { if(selectedEntries.size === collection.shippingEntries.length) setSelectedEntries(new Set()); else setSelectedEntries(new Set(collection.shippingEntries.map(e => e.id))); }}>{selectedEntries.size === collection.shippingEntries.length && collection.shippingEntries.length > 0 ? <CheckSquare size={16}/> : <Square size={16}/>}</button></th><th className="p-6">Status</th><th className="p-6">Date</th><th className="p-6">Influencer</th><th className="p-6">Contact</th><th className="p-6">Address</th><th className="p-6">Item</th><th className="p-6">Memo</th><th className="p-6 text-right">Actions</th></tr></thead><tbody className="divide-y divide-gray-50">{collection.shippingEntries.map(e => (
-                                    <tr key={e.id} className="hover:bg-gray-50/50 group"><td className="p-6 text-center"><button onClick={() => { const next = new Set(selectedEntries); if(next.has(e.id)) next.delete(e.id); else next.add(e.id); setSelectedEntries(next); }}>{selectedEntries.has(e.id) ? <CheckSquare size={16} className="text-black"/> : <Square size={16} className="text-gray-200"/>}</button></td><td className="p-6"><select className={`text-[9px] px-3 py-2 border rounded-sm font-bold uppercase tracking-widest ${e.status === '배송완료' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-orange-50 text-orange-700 border-orange-200'}`} value={e.status} onChange={val => { const next = collection.shippingEntries.map(x => x.id === e.id ? {...x, status: val.target.value} : x); onUpdate({...collection, shippingEntries: next}); }}><option value="준비중">준비중</option><option value="배송완료">배송완료</option></select></td><td className="p-6 whitespace-nowrap text-gray-400 font-mono text-[10px]">{e.submitDate}</td><td className="p-6"><div className="font-bold uppercase tracking-wider">@{e.instagramId}</div><div className="text-[10px] text-gray-400">{e.name}</div></td><td className="p-6 text-gray-500 font-mono text-[10px]">{e.phone}</td><td className="p-6 text-gray-600 max-w-[150px] truncate">{e.address}</td><td className="p-6"><input className="bg-transparent border-b border-transparent focus:border-black w-full font-bold uppercase text-[10px]" value={e.productName} onChange={val => { const next = collection.shippingEntries.map(x => x.id === e.id ? {...x, productName: val.target.value} : x); onUpdate({...collection, shippingEntries: next}); }} /><input className="bg-transparent border-b border-transparent focus:border-black w-full text-[9px]" value={e.size} onChange={val => { const next = collection.shippingEntries.map(x => x.id === e.id ? {...x, size: val.target.value} : x); onUpdate({...collection, shippingEntries: next}); }} /></td><td className="p-6"><textarea className="bg-transparent border border-transparent focus:border-gray-200 focus:bg-white p-2 text-[10px] w-full min-h-[40px] resize-y" value={e.adminMemo} onChange={val => { const next = collection.shippingEntries.map(x => x.id === e.id ? {...x, adminMemo: val.target.value} : x); onUpdate({...collection, shippingEntries: next}); }} /></td><td className="p-6 text-right"><div className="flex justify-end space-x-3 opacity-0 group-hover:opacity-100 transition-all"><button onClick={() => { const c = { ...e, id: generateId(), submitDate: '추가 제품', productName: '', size: '' }; handleUpdate({ shippingEntries: [...collection.shippingEntries, c] }); }}><Copy size={16}/></button><button onClick={() => { if(confirm('Delete?')) onUpdate({...collection, shippingEntries: collection.shippingEntries.filter(x => x.id !== e.id)}); }} className="text-red-200 hover:text-red-500"><Trash2 size={16}/></button></div></td></tr>
-                                ))}</tbody></table></div>
-                            </div>
-                        )}
-                        {activeSubView === 'report' && (
-                            <div className="max-w-6xl mx-auto space-y-16 py-10">
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-12"><div className="bg-white p-12 border border-gray-100 shadow-sm text-center space-y-3"><p className="text-[10px] text-gray-400 uppercase tracking-[0.4em] font-bold">Total Shipments</p><p className="text-5xl font-light tracking-widest">{collection.shippingEntries.length}</p></div><div className="bg-white p-12 border border-gray-100 shadow-sm text-center space-y-3"><p className="text-[10px] text-gray-400 uppercase tracking-[0.4em] font-bold">Requests</p><p className="text-5xl font-light tracking-widest">{collection.shippingEntries.filter(s => s.submitDate !== '추가 제품').length}</p></div><div className="bg-white p-12 border border-gray-100 shadow-sm text-center space-y-3"><p className="text-[10px] text-gray-400 uppercase tracking-[0.4em] font-bold">Shipped Rate</p><p className="text-5xl font-light tracking-widest">{collection.shippingEntries.length ? Math.round((collection.shippingEntries.filter(s => s.status === '배송완료').length / collection.shippingEntries.length) * 100) : 0}%</p></div></div>
-                                <div className="bg-white p-12 border border-gray-100 h-[600px] shadow-sm"><h3 className="text-[11px] font-bold uppercase tracking-[0.5em] mb-16 border-b pb-6">Distribution</h3><ResponsiveContainer width="100%" height="75%"><BarChart data={Object.values(collection.shippingEntries.reduce((acc, curr) => { if (!curr.productName) return acc; const n = curr.productName.toUpperCase(); acc[n] = acc[n] || { name: n, count: 0 }; acc[n].count += 1; return acc; }, {}))}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" /><XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: '#bbb', fontWeight: 'bold' }} /><YAxis axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: '#bbb' }} /><RechartsTooltip /><Bar dataKey="count" fill="#1a1a1a" radius={[2, 2, 0, 0]} /></BarChart></ResponsiveContainer></div>
-                            </div>
-                        )}
-                    </main>
-                    <StorageMonitor percent={usagePercent} />
-                    <Toast error={error} success={success} />
-                </div>
-            );
-        };
-
-        const InfluencerPage = ({ collection, cart, setCart, onLogout, notify, onSubmission, scrollPosRef }) => {
-            const [view, setView] = useState('lookbook');
-            const [activeSlide, setActiveSlide] = useState(0);
-            const [selectedProd, setSelectedProd] = useState(null);
-            const [selectedSize, setSelectedSize] = useState('');
-            const [formData, setFormData] = useState({ instagramId: '', name: '', phone: '', address: '', message: '', extra: '', agreed: false });
-            useLayoutEffect(() => { if (view === 'lookbook' && scrollPosRef.current > 0) setTimeout(() => window.scrollTo({ top: scrollPosRef.current, behavior: 'instant' }), 0); }, [view]);
-            const handleNav = (v) => { if (view === 'lookbook') scrollPosRef.current = window.scrollY; setView(v); window.scrollTo(0, 0); };
-            const next = () => { if(!collection.lookbookImages.length) return; setActiveSlide(p => (p + 2) >= collection.lookbookImages.length ? 0 : p + 2); };
-            const prev = () => { if(!collection.lookbookImages.length) return; setActiveSlide(p => p - 2 < 0 ? Math.max(0, collection.lookbookImages.length - (collection.lookbookImages.length % 2 || 2)) : p - 2); };
-            const addToCart = () => { if(!selectedProd || !selectedSize) { alert('Size preference?'); return; } if(cart.length >= collection.maxProducts) { alert(`Limit ${collection.maxProducts}`); return; } setCart([...cart, { id: generateId(), productName: selectedProd.name, size: selectedSize, image: selectedProd.images[0] || 'https://picsum.photos/400/600' }]); notify('Added', 'success'); handleNav('lookbook'); };
-            const submit = () => { if(!formData.instagramId || !formData.name || !formData.phone || !formData.address || !formData.agreed) { alert('Check all mandatory fields.'); return; } onSubmission(cart.map(item => ({ id: generateId(), status: '준비중', submitDate: new Date().toISOString().split('T')[0], ...formData, productName: item.productName, size: item.size, quantity: 1, adminMemo: '' }))); handleNav('success'); setCart([]); };
-
-            if (view === 'success') return (<div className="min-h-screen flex flex-col items-center justify-center p-12 text-center space-y-12"><CheckCircle2 size={80} strokeWidth={1}/><h2 className="text-2xl font-light tracking-[0.4em] uppercase">Complete</h2><p className="text-sm font-light text-gray-400 max-w-sm mx-auto">Thank you, nuuanu girl! We love having you as part of our journey✨</p><button onClick={onLogout} className="text-[10px] tracking-[0.5em] border-b border-black pb-1 pt-12">Return</button></div>);
-
-            return (
-                <div className="min-h-screen bg-white pb-40">
-                    <header className="px-10 py-10 sticky top-0 bg-white/95 backdrop-blur-md z-40 flex justify-between items-center border-b border-gray-50"><h1 className="text-2xl font-light tracking-[0.5em] uppercase cursor-pointer" onClick={() => handleNav('lookbook')}>nuuanu</h1><div className="flex items-center space-x-12"><button onClick={() => handleNav('cart')} className="relative flex items-center space-x-3 text-[10px] tracking-widest font-bold group"><ShoppingBag size={22} strokeWidth={1} />{cart.length > 0 && <span className="absolute -top-3 -right-3 bg-black text-white text-[8px] w-5 h-5 rounded-full flex items-center justify-center border-2 border-white font-bold">{cart.length}</span>}</button><button onClick={onLogout} className="text-gray-300 hover:text-black transition-colors"><LogOut size={22} strokeWidth={1}/></button></div></header>
-                    {view === 'lookbook' && (
-                        <main className="animate-fade-in"><section className="relative mb-40 px-6 sm:px-10"><div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-10 max-w-7xl mx-auto">{collection.lookbookImages.length > 0 ? (<><div className="aspect-[1/1.5] bg-gray-50 shadow-2xl overflow-hidden"><img src={collection.lookbookImages[activeSlide]} className="w-full h-full object-cover" /></div><div className="hidden md:block aspect-[1/1.5] bg-gray-50 shadow-2xl overflow-hidden"><img src={collection.lookbookImages[activeSlide+1] || collection.lookbookImages[0]} className="w-full h-full object-cover" /></div></>) : (<div className="col-span-2 aspect-[2/1.5] bg-gray-50 flex items-center justify-center text-[11px] tracking-[0.6em] text-gray-200 uppercase italic">Visuals Not Loaded</div>)}</div>{collection.lookbookImages.length > 2 && (<div className="absolute top-1/2 -translate-y-1/2 left-0 w-full flex justify-between px-4 sm:px-16 pointer-events-none"><button onClick={prev} className="pointer-events-auto bg-white/40 backdrop-blur-xl p-6 rounded-full shadow-2xl hover:bg-white transition-all"><ChevronLeft size={28} strokeWidth={1}/></button><button onClick={next} className="pointer-events-auto bg-white/40 backdrop-blur-xl p-6 rounded-full shadow-2xl hover:bg-white transition-all"><ChevronRight size={28} strokeWidth={1}/></button></div>)}</section><section className="max-w-2xl mx-auto text-center mb-52 px-10 space-y-12"><h2 className="text-2xl font-light tracking-[0.5em] uppercase border-b border-gray-100 pb-10 inline-block">{collection.descriptionTitle}</h2><div className="text-sm font-light leading-relaxed tracking-[0.2em] text-gray-400" dangerouslySetInnerHTML={{ __html: collection.descriptionBody.replace(/\n/g, '<br/>') }} /></section><section className="max-w-6xl mx-auto px-10"><div className="flex justify-between items-end border-b border-gray-50 pb-10 mb-20"><div><h3 className="text-[12px] font-bold uppercase tracking-[0.5em]">The Collection</h3></div><p className="text-[10px] text-gray-400 uppercase tracking-[0.4em] font-bold">{cart.length} / {collection.maxProducts}</p></div><div className="product-grid">{collection.products.map(p => (<div key={p.id} className="group cursor-pointer" onClick={() => { setSelectedProd(p); handleNav('product_detail'); }}><div className="aspect-[2/3] bg-gray-50 mb-8 overflow-hidden relative shadow-lg transition-all duration-1000"><img src={p.images[0] || 'https://picsum.photos/seed/nuuanu/400/600'} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-[2000ms]" /><div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors duration-1000" /><div className="absolute bottom-8 left-1/2 -translate-x-1/2 translate-y-6 group-hover:translate-y-0 opacity-0 group-hover:opacity-100 transition-all duration-700"><span className="bg-white px-10 py-3 text-[10px] tracking-[0.5em] uppercase font-bold shadow-2xl">Details</span></div></div><div className="space-y-2"><h4 className="text-[11px] font-bold tracking-[0.3em] uppercase">{p.name}</h4><p className="text-[10px] text-gray-300 uppercase tracking-widest">KRW {p.price}</p></div></div>))}</div></section></main>
-                    )}
-                    {view === 'product_detail' && selectedProd && (
-                        <main className="max-w-6xl mx-auto px-10 pt-16 animate-fade-in"><button onClick={() => handleNav('lookbook')} className="text-[11px] tracking-[0.4em] uppercase mb-24 flex items-center hover:text-gray-400 font-bold"><ChevronLeft size={18} className="mr-1" strokeWidth={1} /> Back</button><div className="grid grid-cols-1 lg:grid-cols-2 gap-32"><div className="space-y-10"><div className="aspect-[2/3] bg-gray-50 shadow-2xl overflow-hidden"><img src={selectedProd.images[0] || 'https://picsum.photos/400/600'} className="w-full h-full object-cover" /></div><div className="grid grid-cols-4 gap-6">{selectedProd.images.slice(1).map((img, i) => (<div key={i} className="aspect-[2/3] bg-gray-50 border border-gray-100 shadow-xl overflow-hidden"><img src={img} className="w-full h-full object-cover" /></div>))}</div></div><div className="space-y-20"><div className="space-y-6 border-b pb-12 border-gray-100"><h2 className="text-5xl font-light tracking-[0.3em] uppercase">{selectedProd.name}</h2><p className="text-gray-300 tracking-[0.5em] text-sm uppercase">Catalog Price: {selectedProd.price}</p></div><div className="text-sm leading-relaxed text-gray-400 font-light" dangerouslySetInnerHTML={{ __html: selectedProd.description.replace(/\n/g, '<br/>') }} /><div className="space-y-10"><p className="text-[11px] tracking-[0.5em] uppercase font-bold">Size</p><div className="flex flex-wrap gap-5">{selectedProd.options.map(s => (<button key={s} onClick={() => setSelectedSize(s)} className={`min-w-[100px] py-4 border tracking-[0.4em] text-[11px] font-bold ${selectedSize === s ? 'bg-black text-white border-black shadow-2xl scale-110' : 'border-gray-200 hover:border-black'}`}>{s}</button>))}</div></div><div className="pt-10"><button onClick={addToCart} className="w-full bg-black text-white py-8 text-[11px] tracking-[0.6em] font-bold shadow-2xl active:scale-[0.98]">Add</button></div></div></div></main>
-                    )}
-                    {view === 'cart' && (
-                        <main className="max-w-2xl mx-auto px-10 pt-16 animate-fade-in"><button onClick={() => handleNav('lookbook')} className="text-[11px] tracking-[0.4em] uppercase mb-24 flex items-center hover:text-gray-400 font-bold"><ChevronLeft size={18} className="mr-1" strokeWidth={1} /> Back</button><div className="flex justify-between items-end border-b pb-10 mb-20 border-gray-100"><h2 className="text-xs font-bold uppercase tracking-[0.5em]">Selected Items</h2><p className="text-[10px] text-gray-300 font-bold">{cart.length} / {collection.maxProducts}</p></div><div className="space-y-16 mb-32">{cart.map((item, i) => (<div key={i} className="flex space-x-10 items-center group"><div className="w-28 aspect-[2/3] bg-gray-50 shadow-2xl overflow-hidden"><img src={item.image} className="w-full h-full object-cover" /></div><div className="flex-1"><h4 className="text-[12px] font-bold uppercase tracking-[0.3em] mb-3">{item.productName}</h4><p className="text-[10px] text-gray-400 tracking-[0.4em] uppercase">Preference: <span className="text-black ml-2 font-bold">{item.size}</span></p></div><button onClick={() => setCart(cart.filter((_, idx) => idx !== i))} className="text-gray-200 hover:text-red-500 transition-all duration-500 p-4"><X size={24} strokeWidth={1}/></button></div>))}</div><div className="bg-gray-50 p-12 space-y-16 shadow-2xl rounded-sm border border-gray-100"><h3 className="text-[11px] font-bold uppercase tracking-[0.5em] border-b pb-8 border-gray-200">Shipping</h3><div className="space-y-10"><div className="grid grid-cols-1 sm:grid-cols-2 gap-10"><input placeholder="INSTAGRAM (@)" className="w-full border-b border-gray-200 bg-transparent py-5 text-[11px] outline-none" value={formData.instagramId} onChange={e => setFormData({...formData, instagramId: e.target.value})} /><input placeholder="NAME" className="w-full border-b border-gray-200 bg-transparent py-5 text-[11px] outline-none" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} /></div><div className="grid grid-cols-1 sm:grid-cols-2 gap-10"><input placeholder="PHONE" className="w-full border-b border-gray-200 bg-transparent py-5 text-[11px] outline-none" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} /><input placeholder="ADDRESS" className="w-full border-b border-gray-200 bg-transparent py-5 text-[11px] outline-none" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} /></div><textarea placeholder="MESSAGE (OPTIONAL)" className="w-full h-32 border-b border-gray-200 bg-transparent py-5 text-[11px] outline-none resize-none" value={formData.message} onChange={e => setFormData({...formData, message: e.target.value})} /><label className="flex items-start space-x-6 cursor-pointer group"><div className="mt-1" onClick={() => setFormData({...formData, agreed: !formData.agreed})}>{formData.agreed ? <CheckSquare size={20} className="text-black" /> : <Square size={20} className="text-gray-300 transition-colors" />}</div><span className="text-[9px] text-gray-400 leading-relaxed">*재고 상황 등에 따라 일부 내용이 달라질 수 있으며, 올려주신 콘텐츠는 브랜드 소개나 홍보에 활용될 수 있음에 동의합니다.</span></label><button onClick={submit} className="w-full bg-black text-white py-8 text-[11px] tracking-[0.6em] font-bold shadow-2xl disabled:opacity-20" disabled={!cart.length || !formData.agreed}>Confirm Request</button></div></div></main>
-                    )}
-                </div>
-            );
-        };
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
     </script>
