@@ -10,9 +10,6 @@
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    
-    <!-- Recharts (UMD) -->
-    <script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
 
     <!-- Firebase SDK (Compat version) -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
@@ -102,12 +99,6 @@
 
     <script type="text/babel">
         const { useState, useEffect, useRef, useLayoutEffect, useMemo } = React;
-        const RechartsLib = window.Recharts || {};
-
-        const { 
-            BarChart, Bar, XAxis, YAxis, CartesianGrid, 
-            Tooltip: RechartsTooltip, ResponsiveContainer, Cell 
-        } = RechartsLib;
 
         // Custom SVG Icons
         const Icons = {
@@ -129,6 +120,16 @@
             ChevronRight: (props) => (
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" {...props}>
                     <path d="m9 18 6-6-6-6"/>
+                </svg>
+            ),
+            ChevronDown: (props) => (
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" {...props}>
+                    <path d="m6 9 6 6 6-6"/>
+                </svg>
+            ),
+            ChevronUp: (props) => (
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" {...props}>
+                    <path d="m18 15-6-6-6 6"/>
                 </svg>
             ),
             Plus: (props) => (
@@ -393,8 +394,10 @@
                 e.target.value = null; 
             };
 
+            const shippingEntries = collection.shippingEntries || [];
+
             const sortedShipping = useMemo(() => {
-                const data = [...collection.shippingEntries];
+                const data = [...shippingEntries];
                 if (!sortConfig.key) return data;
                 return data.sort((a, b) => {
                     const valA = String(a[sortConfig.key] || '').toLowerCase();
@@ -403,11 +406,11 @@
                     if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
                     return 0;
                 });
-            }, [collection.shippingEntries, sortConfig]);
+            }, [shippingEntries, sortConfig]);
 
             const handleBulkStatusChange = (newStatus) => {
                 if (selectedRows.size === 0) return;
-                const next = collection.shippingEntries.map(e => selectedRows.has(e.id) ? { ...e, status: newStatus } : e);
+                const next = shippingEntries.map(e => selectedRows.has(e.id) ? { ...e, status: newStatus } : e);
                 handleUpdate({ shippingEntries: next });
                 setSelectedRows(new Set());
             };
@@ -440,9 +443,37 @@
 
             const handleExport = () => {
                 const dataToExport = selectedRows.size > 0 
-                    ? collection.shippingEntries.filter(e => selectedRows.has(e.id))
-                    : collection.shippingEntries;
+                    ? shippingEntries.filter(e => selectedRows.has(e.id))
+                    : shippingEntries;
                 downloadCSV(`${collection.name}_shipments.csv`, dataToExport);
+            };
+
+            const handleCopyRow = (e) => {
+                const newRow = { 
+                    ...e, 
+                    id: generateId(), 
+                    submitDate: new Date().toISOString().split('T')[0], 
+                    status: '준비중',
+                    isManual: true 
+                };
+                handleUpdate({ shippingEntries: [newRow, ...shippingEntries] });
+            };
+
+            const handleDeleteRow = (id) => {
+                if(confirm('Delete this record?')) {
+                    handleUpdate({ shippingEntries: shippingEntries.filter(x => x.id !== id) });
+                }
+            };
+
+            const handleDeleteCollection = () => {
+                if (window.confirm("정말로 이 컬렉션을 삭제하시겠습니까? 삭제된 데이터는 복구할 수 없습니다.")) {
+                    const inputCode = window.prompt("보안을 위해 어드민 코드를 입력해 주세요.");
+                    if (inputCode === adminAccessCode) {
+                        onDelete(); // Prop which triggers App.tsx deleteCollection
+                    } else if (inputCode !== null) {
+                        notify('어드민 코드가 틀렸습니다.', 'error');
+                    }
+                }
             };
 
             const handleLookbookUpload = async (e) => {
@@ -451,7 +482,7 @@
                 try {
                     const uploads = Array.from(e.target.files).map(f => uploadToCloudinary(f));
                     const urls = await Promise.all(uploads);
-                    handleUpdate({ lookbookImages: [...collection.lookbookImages, ...urls] });
+                    handleUpdate({ lookbookImages: [...(collection.lookbookImages || []), ...urls] });
                     notify(`${urls.length} images uploaded`, 'success');
                 } catch (err) {
                     notify('Upload failed.', 'error');
@@ -466,8 +497,8 @@
                 try {
                     const uploads = Array.from(e.target.files).map(f => uploadToCloudinary(f));
                     const urls = await Promise.all(uploads);
-                    const updatedProducts = collection.products.map(p => 
-                        p.id === productId ? { ...p, images: [...p.images, ...urls] } : p
+                    const updatedProducts = (collection.products || []).map(p => 
+                        p.id === productId ? { ...p, images: [...(p.images || []), ...urls] } : p
                     );
                     handleUpdate({ products: updatedProducts });
                     notify(`${urls.length} images uploaded`, 'success');
@@ -478,7 +509,21 @@
                 }
             };
 
-            const accessCodes = collection.accessCodesV2 || [{ code: collection.accessCode || '', limit: collection.maxProducts || 1 }];
+            const accessCodes = collection.accessCodesV2 || [];
+
+            const productCounts = useMemo(() => {
+                const map = shippingEntries.reduce((acc, curr) => {
+                    if (!curr.productName) return acc;
+                    const n = curr.productName.toUpperCase().trim();
+                    acc[n] = (acc[n] || 0) + 1;
+                    return acc;
+                }, {});
+                return Object.entries(map).sort((a, b) => b[1] - a[1]);
+            }, [shippingEntries]);
+
+            const maxCount = useMemo(() => {
+                return productCounts.length > 0 ? productCounts[0][1] : 0;
+            }, [productCounts]);
 
             return (
                 <div className="min-h-screen bg-white flex flex-col animate-fade-in">
@@ -490,7 +535,12 @@
                             <h2 className="text-[18px] font-bold tracking-[0.1em] uppercase">{collection.name}</h2>
                         </div>
                         <nav className="flex space-x-16">
-                            {[{id:'settings', label:'Settings', icon:Icons.Settings}, {id:'products', label:'Products', icon:Icons.Package}, {id:'shipping', label:'Shipping', icon:Icons.Truck}, {id:'report', label:'Report', icon:Icons.Chart}].map(tab => (
+                            {[
+                                {id:'settings', label:'Settings', icon:Icons.Settings}, 
+                                {id:'products', label:'Products', icon:Icons.Package}, 
+                                {id:'shipping', label:'Shipping', icon:Icons.Truck}, 
+                                {id:'report', label:'Report', icon:Icons.Chart}
+                            ].map(tab => (
                                 <button key={tab.id} onClick={() => setSubView(tab.id)} className={`flex items-center space-x-3 text-[15px] uppercase tracking-[0.075em] py-2 ${activeSubView === tab.id ? 'text-black font-bold border-b-2 border-black' : 'text-grey-medium hover:text-black'}`}>
                                     <tab.icon size={20} /> <span className="hidden md:inline">{tab.label}</span>
                                 </button>
@@ -567,7 +617,7 @@
                                 <section className="space-y-10">
                                     <h3 className="text-[15px] font-bold uppercase tracking-[0.1em] border-b pb-6">Lookbook</h3>
                                     <div className="grid grid-cols-2 sm:grid-cols-4 lg:gap-0">
-                                        {collection.lookbookImages.map((img, i) => (
+                                        {(collection.lookbookImages || []).map((img, i) => (
                                             <div key={i} className="relative group bg-transparent border overflow-hidden">
                                                 <img src={img} className="w-full h-auto block" />
                                                 <button onClick={() => { const next = [...collection.lookbookImages]; next.splice(i, 1); handleUpdate({ lookbookImages: next }); }} className="absolute top-4 right-4 bg-white/80 p-3 opacity-0 group-hover:opacity-100 shadow transition-opacity z-10"><Icons.X size={20}/></button>
@@ -579,7 +629,14 @@
                                         </label>
                                     </div>
                                 </section>
-                                <div className="pt-24 text-center"><button onClick={onDelete} className="text-red-400 text-[14px] uppercase font-bold px-16 py-5 bg-red-50 rounded-full hover:bg-red-100 transition-colors">Delete Collection</button></div>
+                                <div className="pt-24 text-center">
+                                    <button 
+                                        onClick={handleDeleteCollection} 
+                                        className="text-red-400 text-[14px] uppercase font-bold px-16 py-5 bg-red-50 rounded-full hover:bg-red-100 transition-colors"
+                                    >
+                                        Delete Collection
+                                    </button>
+                                </div>
                             </div>
                         )}
                         {activeSubView === 'products' && (
@@ -591,11 +648,11 @@
                                             <Icons.Spreadsheet size={20} className="mr-3" /> Bulk Upload
                                             <input type="file" accept=".csv" className="hidden" onChange={handleCSVUpload} />
                                         </label>
-                                        <button onClick={() => handleUpdate({ products: [...collection.products, { id: generateId(), name: 'New Item', price: '0', options: ['OS'], description: '', images: [] }] })} className="bg-black text-white px-12 py-4 text-[14px] uppercase font-bold flex items-center"><Icons.Plus size={20} className="mr-3" /> Add Product</button>
+                                        <button onClick={() => handleUpdate({ products: [...(collection.products || []), { id: generateId(), name: 'New Item', price: '0', options: ['OS'], description: '', images: [] }] })} className="bg-black text-white px-12 py-4 text-[14px] uppercase font-bold flex items-center"><Icons.Plus size={20} className="mr-3" /> Add Product</button>
                                     </div>
                                 </div>
                                 <div className="grid gap-16">
-                                    {collection.products.map(p => (
+                                    {(collection.products || []).map(p => (
                                         <div key={p.id} className="border-2 p-12 flex flex-col xl:flex-row gap-16 bg-white hover:shadow-2xl transition-all">
                                             <div className="flex-1 grid gap-12 md:grid-cols-2">
                                                 <div className="space-y-2">
@@ -617,7 +674,7 @@
                                             </div>
                                             <div className="xl:w-80 space-y-8">
                                                 <div className="grid grid-cols-3 gap-3">
-                                                    {p.images.map((img, i) => (
+                                                    {(p.images || []).map((img, i) => (
                                                         <div key={i} className="aspect-[2/3] relative group border overflow-hidden bg-transparent">
                                                           <img src={img} className="absolute inset-0 w-full h-full object-cover block"/>
                                                           <button onClick={() => { const ni = [...p.images]; ni.splice(i, 1); handleUpdate({ products: collection.products.map(x => x.id === p.id ? {...x, images: ni} : x) }); }} className="absolute top-2 right-2 bg-white p-2 opacity-0 group-hover:opacity-100 shadow transition-opacity z-10"><Icons.X size={14}/></button>
@@ -636,7 +693,7 @@
                             </div>
                         )}
                         {activeSubView === 'shipping' && (
-                            <div className="space-y-8">
+                            <div className="space-y-8 animate-fade-in">
                                 <div className="flex justify-between items-center border-b pb-8">
                                     <h3 className="text-[15px] font-bold uppercase tracking-[0.1em]">Tracking Table</h3>
                                     <div className="flex space-x-6 items-center">
@@ -652,105 +709,121 @@
                                         </button>
                                     </div>
                                 </div>
-                                <div className="overflow-x-auto border-2">
-                                    <table className="w-full text-left text-[16px] min-w-[1400px]">
-                                        <thead className="bg-gray-50 uppercase text-[12px] tracking-[0.05em] text-grey-medium border-b-2 sticky top-0 z-10">
-                                            <tr>
-                                                <th className="p-6 w-16 text-center">
-                                                    <input type="checkbox" className="w-4 h-4" checked={selectedRows.size === sortedShipping.length && sortedShipping.length > 0} onChange={toggleAll} />
-                                                </th>
-                                                {[
-                                                    { key: 'status', label: 'Status' },
-                                                    { key: 'submitDate', label: 'Date' },
-                                                    { key: 'instagramId', label: 'Insta ID' },
-                                                    { key: 'name', label: 'Name' },
-                                                    { key: 'phone', label: 'Phone' },
-                                                    { key: 'address', label: 'Address' },
-                                                    { key: 'productName', label: 'Product' },
-                                                    { key: 'size', label: 'Size' },
-                                                    { key: 'adminMemo', label: 'Memo' }
-                                                ].map(col => (
-                                                    <th key={col.key} className={`p-6 cursor-pointer hover:text-black group select-none whitespace-nowrap`} onClick={() => handleSort(col.key)}>
-                                                        <div className="flex items-center">
-                                                            {col.label} {renderSortIcon(col.key)}
-                                                        </div>
+                                {shippingEntries.length === 0 ? (
+                                    <div className="py-24 text-center text-grey-medium uppercase tracking-[0.1em] text-xs">주문 내역이 없습니다.</div>
+                                ) : (
+                                    <div className="overflow-x-auto border-2">
+                                        <table className="w-full text-left text-[16px] min-w-[1400px]">
+                                            <thead className="bg-gray-50 uppercase text-[12px] tracking-[0.05em] text-grey-medium border-b-2 sticky top-0 z-10">
+                                                <tr>
+                                                    <th className="p-6 w-16 text-center">
+                                                        <input type="checkbox" className="w-4 h-4" checked={selectedRows.size === sortedShipping.length && sortedShipping.length > 0} onChange={toggleAll} />
                                                     </th>
-                                                ))}
-                                                <th className="p-6 text-right">Actions</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y-2 divide-gray-100">
-                                            {sortedShipping.map(e => (
-                                                <tr key={e.id} className={`${selectedRows.has(e.id) ? 'bg-gray-50' : 'bg-white'} hover:bg-gray-50/50 transition-colors`}>
-                                                    <td className="p-6 text-center">
-                                                        <input type="checkbox" className="w-4 h-4" checked={selectedRows.has(e.id)} onChange={() => toggleRow(e.id)} />
-                                                    </td>
-                                                    <td className="p-6">
-                                                        <select className={`text-[12px] px-3 py-2 border-2 font-bold uppercase bg-white ${e.status === '배송완료' ? 'text-green-600 border-green-100 bg-green-50' : 'text-orange-600 border-orange-100 bg-orange-50'}`} value={e.status} onChange={val => handleUpdate({ shippingEntries: collection.shippingEntries.map(x => x.id === e.id ? {...x, status: val.target.value} : x) })}>
-                                                            <option value="준비중">준비중</option>
-                                                            <option value="배송완료">배송완료</option>
-                                                        </select>
-                                                    </td>
-                                                    <td className="p-6 text-grey-medium font-mono text-[14px]">{e.submitDate}</td>
-                                                    <td className="p-6 font-bold uppercase">@{e.instagramId}</td>
-                                                    <td className="p-6">{e.name}</td>
-                                                    <td className="p-6 truncate-custom">{truncateText(e.phone, 3)}</td>
-                                                    <td className="p-6 truncate-custom">{truncateText(e.address, 3)}</td>
-                                                    <td className="p-6">
-                                                        <input className="w-full bg-transparent border-b-2 border-transparent focus:border-black outline-none" value={e.productName} onChange={v => handleUpdate({ shippingEntries: collection.shippingEntries.map(x => x.id === e.id ? {...x, productName: v.target.value} : x) }, true)} />
-                                                    </td>
-                                                    <td className="p-6">
-                                                        <input className="w-full bg-transparent border-b-2 border-transparent focus:border-black outline-none uppercase" value={e.size} onChange={v => handleUpdate({ shippingEntries: collection.shippingEntries.map(x => x.id === e.id ? {...x, size: v.target.value} : x) }, true)} />
-                                                    </td>
-                                                    <td className="p-6">
-                                                        <textarea className="w-full h-12 text-[14px] border-2 bg-transparent p-2 focus:bg-white focus:h-24 transition-all outline-none" placeholder="..." value={e.adminMemo || ''} onChange={v => handleUpdate({ shippingEntries: collection.shippingEntries.map(x => x.id === e.id ? {...x, adminMemo: v.target.value} : x) }, true)} />
-                                                    </td>
-                                                    <td className="p-6 text-right">
-                                                        <div className="flex justify-end space-x-3">
-                                                            <button onClick={()=>{ handleUpdate({shippingEntries:[...collection.shippingEntries, {...e, id: generateId(), submitDate:'추가 제품', productName:'', size:'', status: '준비중'}]}); }} className="p-2 bg-black text-white hover:bg-black/80 transition-transform rounded flex items-center justify-center"><Icons.Copy size={20}/></button>
-                                                            <button onClick={() => { if(confirm('Delete record?')) handleUpdate({ shippingEntries: collection.shippingEntries.filter(x => x.id !== e.id) }); }} className="p-2 bg-black text-white hover:bg-red-600 transition-transform rounded flex items-center justify-center"><Icons.Trash size={20}/></button>
-                                                        </div>
-                                                    </td>
+                                                    {[
+                                                        { key: 'status', label: 'Status' },
+                                                        { key: 'submitDate', label: 'Date' },
+                                                        { key: 'instagramId', label: 'Insta ID' },
+                                                        { key: 'name', label: 'Name' },
+                                                        { key: 'phone', label: 'Phone' },
+                                                        { key: 'address', label: 'Address' },
+                                                        { key: 'productName', label: 'Product' },
+                                                        { key: 'size', label: 'Size' },
+                                                        { key: 'adminMemo', label: 'Memo' }
+                                                    ].map(col => (
+                                                        <th key={col.key} className={`p-6 cursor-pointer hover:text-black group select-none whitespace-nowrap`} onClick={() => handleSort(col.key)}>
+                                                            <div className="flex items-center">
+                                                                {col.label} {renderSortIcon(col.key)}
+                                                            </div>
+                                                        </th>
+                                                    ))}
+                                                    <th className="p-6 text-right">Actions</th>
                                                 </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
+                                            </thead>
+                                            <tbody className="divide-y-2 divide-gray-100">
+                                                {sortedShipping.map(e => (
+                                                    <tr key={e.id} className={`${selectedRows.has(e.id) ? 'bg-gray-50' : 'bg-white'} hover:bg-gray-50/50 transition-colors`}>
+                                                        <td className="p-6 text-center">
+                                                            <input type="checkbox" className="w-4 h-4" checked={selectedRows.has(e.id)} onChange={() => toggleRow(e.id)} />
+                                                        </td>
+                                                        <td className="p-6">
+                                                            <select className={`text-[12px] px-3 py-2 border-2 font-bold uppercase bg-white ${e.status === '배송완료' ? 'text-green-600 border-green-100 bg-green-50' : 'text-orange-600 border-orange-100 bg-orange-50'}`} value={e.status} onChange={val => handleUpdate({ shippingEntries: shippingEntries.map(x => x.id === e.id ? {...x, status: val.target.value} : x) })}>
+                                                                <option value="준비중">준비중</option>
+                                                                <option value="배송완료">배송완료</option>
+                                                            </select>
+                                                        </td>
+                                                        <td className="p-6 text-grey-medium font-mono text-[14px]">{e.submitDate}</td>
+                                                        <td className="p-6 font-bold uppercase">@{e.instagramId}</td>
+                                                        <td className="p-6">{e.name}</td>
+                                                        <td className="p-6 truncate-custom">{truncateText(e.phone, 13)}</td>
+                                                        <td className="p-6 truncate-custom" title={e.address}>{truncateText(e.address, 20)}</td>
+                                                        <td className="p-6">
+                                                            <input className="w-full bg-transparent border-b-2 border-transparent focus:border-black outline-none" value={e.productName} onChange={v => handleUpdate({ shippingEntries: shippingEntries.map(x => x.id === e.id ? {...x, productName: v.target.value} : x) }, true)} />
+                                                        </td>
+                                                        <td className="p-6">
+                                                            <input className="w-full bg-transparent border-b-2 border-transparent focus:border-black outline-none uppercase" value={e.size} onChange={v => handleUpdate({ shippingEntries: shippingEntries.map(x => x.id === e.id ? {...x, size: v.target.value} : x) }, true)} />
+                                                        </td>
+                                                        <td className="p-6">
+                                                            <textarea className="w-full h-12 text-[14px] border-2 bg-transparent p-2 focus:bg-white focus:h-24 transition-all outline-none" placeholder="..." value={e.adminMemo || ''} onChange={v => handleUpdate({ shippingEntries: shippingEntries.map(x => x.id === e.id ? {...x, adminMemo: v.target.value} : x) }, true)} />
+                                                        </td>
+                                                        <td className="p-6 text-right">
+                                                            <div className="flex justify-end space-x-3">
+                                                                <button onClick={() => handleCopyRow(e)} className="p-2 bg-black text-white hover:bg-black/80 transition-transform rounded flex items-center justify-center" title="Copy Row"><Icons.Copy size={18}/></button>
+                                                                {e.isManual && (
+                                                                    <button onClick={() => handleDeleteRow(e.id)} className="p-2 bg-black text-white hover:bg-red-600 transition-transform rounded flex items-center justify-center" title="Delete Row"><Icons.Trash size={18}/></button>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
                             </div>
                         )}
                         {activeSubView === 'report' && (
-                            <div className="max-w-6xl mx-auto space-y-20">
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
-                                    <div className="bg-nuuanu-blue-soft p-16 border-2 border-nuuanu-blue-light shadow-sm text-center space-y-4 rounded-xl">
-                                        <p className="text-[15px] text-nuuanu-blue uppercase font-bold">Total</p>
-                                        <p className="text-7xl font-light text-nuuanu-blue">{collection.shippingEntries.length}</p>
+                            <div className="max-w-6xl mx-auto space-y-20 animate-fade-in">
+                                <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+                                    <div className="bg-nuuanu-blue-soft p-12 border-2 border-nuuanu-blue-light shadow-sm text-center space-y-4 rounded-xl">
+                                        <p className="text-[11px] text-nuuanu-blue uppercase font-bold tracking-wider">Total Items</p>
+                                        <p className="text-6xl font-light text-nuuanu-blue">{shippingEntries.length}</p>
                                     </div>
-                                    <div className="bg-nuuanu-blue-soft p-16 border-2 border-nuuanu-blue-light shadow-sm text-center space-y-4 rounded-xl">
-                                        <p className="text-[15px] text-nuuanu-blue uppercase font-bold">Influencers</p>
-                                        <p className="text-7xl font-light text-nuuanu-blue">{collection.shippingEntries.filter(s => s.submitDate !== '추가 제품').length}</p>
+                                    <div className="bg-nuuanu-blue-soft p-12 border-2 border-nuuanu-blue-light shadow-sm text-center space-y-4 rounded-xl">
+                                        <p className="text-[11px] text-nuuanu-blue uppercase font-bold tracking-wider">Unique Influencers</p>
+                                        <p className="text-6xl font-light text-nuuanu-blue">{new Set(shippingEntries.map(s => s.instagramId)).size}</p>
                                     </div>
-                                    <div className="bg-nuuanu-blue-soft p-16 border-2 border-nuuanu-blue-light shadow-sm text-center space-y-4 rounded-xl">
-                                        <p className="text-[15px] text-nuuanu-blue uppercase font-bold">Completion</p>
-                                        <p className="text-7xl font-light text-nuuanu-blue">{collection.shippingEntries.length ? Math.round((collection.shippingEntries.filter(s => s.status === '배송완료').length / collection.shippingEntries.length) * 100) : 0}%</p>
+                                    <div className="bg-nuuanu-blue-soft p-12 border-2 border-nuuanu-blue-light shadow-sm text-center space-y-4 rounded-xl">
+                                        <p className="text-[11px] text-nuuanu-blue uppercase font-bold tracking-wider">Unused Codes</p>
+                                        <p className="text-6xl font-light text-nuuanu-blue">
+                                            {Math.max(0, accessCodes.length - new Set(shippingEntries.map(s => s.usedCode).filter(Boolean)).size)}
+                                        </p>
+                                    </div>
+                                    <div className="bg-nuuanu-blue-soft p-12 border-2 border-nuuanu-blue-light shadow-sm text-center space-y-4 rounded-xl">
+                                        <p className="text-[11px] text-nuuanu-blue uppercase font-bold tracking-wider">Completion</p>
+                                        <p className="text-6xl font-light text-nuuanu-blue">{shippingEntries.length ? Math.round((shippingEntries.filter(s => s.status === '배송완료').length / shippingEntries.length) * 100) : 0}%</p>
                                     </div>
                                 </div>
-                                <div className="bg-white p-16 border-2 h-[600px] shadow-sm rounded-xl">
-                                    <h3 className="text-[18px] font-bold uppercase mb-12 border-b-2 pb-8">Product Popularity</h3>
-                                    <ResponsiveContainer width="100%" height="80%">
-                                        <BarChart data={Object.values(collection.shippingEntries.reduce((acc, curr) => { 
-                                            if (!curr.productName) return acc; 
-                                            const n = curr.productName.toUpperCase(); 
-                                            acc[n] = acc[n] || { name: n, count: 0 }; 
-                                            acc[n].count += 1; 
-                                            return acc; 
-                                        }, {}))}>
-                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                                            <XAxis dataKey="name" tick={{fontSize: 10, fill:'#64748b'}} axisLine={false} tickLine={false}/>
-                                            <YAxis tick={{fontSize: 10, fill:'#64748b'}} axisLine={false} tickLine={false}/>
-                                            <RechartsTooltip cursor={{fill: '#f1f5f9'}} contentStyle={{ borderRadius: '8px', border: '1px solid #dbeafe'}} />
-                                            <Bar dataKey="count" fill="#2563eb" radius={[6, 6, 0, 0]} barSize={40} />
-                                        </BarChart>
-                                    </ResponsiveContainer>
+                                
+                                <div className="bg-white p-12 border-2 shadow-sm rounded-xl">
+                                    <h3 className="text-[15px] font-bold uppercase mb-12 border-b-2 pb-6 tracking-wider">Product Popularity</h3>
+                                    {productCounts.length === 0 ? (
+                                        <div className="py-24 text-center text-grey-medium uppercase text-xs">표시할 데이터가 없습니다.</div>
+                                    ) : (
+                                        <div className="space-y-6">
+                                            {productCounts.map(([name, count]) => (
+                                                <div key={name} className="flex items-center space-x-6">
+                                                    <div className="w-1/4 text-[12px] font-bold uppercase truncate text-grey-medium" title={name}>{name}</div>
+                                                    <div className="flex-1 relative h-8 bg-gray-50 rounded-full overflow-hidden">
+                                                        <div 
+                                                            className="absolute top-0 left-0 h-full bg-nuuanu-blue transition-all duration-1000 ease-out"
+                                                            style={{ width: `${(count / maxCount) * 100}%` }}
+                                                        />
+                                                    </div>
+                                                    <div className="w-12 text-[12px] font-bold text-nuuanu-blue">{count}</div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         )}
@@ -768,15 +841,14 @@
             const [selectedSize, setSelectedSize] = useState('');
             const [formData, setFormData] = useState({ instagramId: '', name: '', phone: '', address: '', message: '', extra: '', agreed: false });
             
-            // Swipe handlers state
             const [touchStart, setTouchStart] = useState(null);
             const [touchEnd, setTouchEnd] = useState(null);
             const minSwipeDistance = 50;
 
             const currentLimit = useMemo(() => {
-                const acs = collection.accessCodesV2 || [];
-                const found = acs.find(a => a.code.toLowerCase().trim() === loginCode.toLowerCase().trim());
-                return found ? found.limit : (collection.maxProducts || 1);
+                const acs = (collection && collection.accessCodesV2) || [];
+                const found = acs.find(a => a.code && a.code.toLowerCase().trim() === loginCode.toLowerCase().trim());
+                return found ? found.limit : 1;
             }, [collection, loginCode]);
 
             useLayoutEffect(() => { 
@@ -788,10 +860,15 @@
                 setView(v); window.scrollTo(0, 0); 
             };
 
-            const next = () => { if(!collection.lookbookImages.length) return; setActiveSlide(p => (p + 2) >= collection.lookbookImages.length ? 0 : p + 2); };
-            const prev = () => { if(!collection.lookbookImages.length) return; setActiveSlide(p => p - 2 < 0 ? Math.max(0, collection.lookbookImages.length - (collection.lookbookImages.length % 2 || 2)) : p - 2); };
+            const next = () => { 
+                if(!(collection.lookbookImages?.length)) return; 
+                setActiveSlide(p => (p + 2) >= collection.lookbookImages.length ? 0 : p + 2); 
+            };
+            const prev = () => { 
+                if(!(collection.lookbookImages?.length)) return; 
+                setActiveSlide(p => p - 2 < 0 ? Math.max(0, collection.lookbookImages.length - (collection.lookbookImages.length % 2 || 2)) : p - 2); 
+            };
             
-            // Swipe Handlers
             const handleTouchStart = (e) => {
                 setTouchEnd(null);
                 setTouchStart(e.targetTouches[0].clientX);
@@ -813,14 +890,25 @@
             const addToCart = () => { 
                 if(!selectedProd || !selectedSize) { alert('Select size preference'); return; } 
                 if(cart.length >= currentLimit) { alert(`Selection limit reached: ${currentLimit} items.`); return; } 
-                setCart([...cart, { id: generateId(), productName: selectedProd.name, size: selectedSize, image: selectedProd.images[0] || 'https://picsum.photos/400/600' }]); 
+                setCart([...cart, { id: generateId(), productName: selectedProd.name, size: selectedSize, image: (selectedProd.images && selectedProd.images[0]) || 'https://picsum.photos/400/600' }]); 
                 notify('Added to selection', 'success'); 
                 handleNav('lookbook'); 
             };
 
             const submit = () => { 
                 if(!formData.instagramId || !formData.name || !formData.phone || !formData.address || !formData.agreed) { alert('Check required fields'); return; } 
-                onSubmission(cart.map(item => ({ id: generateId(), status: '준비중', submitDate: new Date().toISOString().split('T')[0], ...formData, productName: item.productName, size: item.size, quantity: 1, adminMemo: '' }))); 
+                onSubmission(cart.map(item => ({ 
+                    id: generateId(), 
+                    status: '준비중', 
+                    submitDate: new Date().toISOString().split('T')[0], 
+                    ...formData, 
+                    productName: item.productName, 
+                    size: item.size, 
+                    quantity: 1, 
+                    usedCode: loginCode, 
+                    adminMemo: '',
+                    isManual: false 
+                }))); 
                 setView('success'); setCart([]); 
             };
 
@@ -856,7 +944,7 @@
                                 onTouchEnd={handleTouchEnd}
                             >
                                 <div className="grid grid-cols-1 md:grid-cols-2 max-w-7xl mx-auto relative group">
-                                    {collection.lookbookImages.length > 0 ? (
+                                    {(collection.lookbookImages && collection.lookbookImages.length > 0) ? (
                                         <>
                                             <div className="aspect-[2/3] bg-transparent overflow-hidden relative">
                                                 <img src={collection.lookbookImages[activeSlide]} className="w-full h-full object-cover block" />
@@ -869,7 +957,7 @@
                                         <div className="col-span-2 aspect-[2/1.5] bg-transparent flex items-center justify-center text-[10px] tracking-[0.1em] text-grey-medium uppercase">Lookbook coming soon</div>
                                     )}
 
-                                    {collection.lookbookImages.length > 2 && (
+                                    {collection.lookbookImages && collection.lookbookImages.length > 2 && (
                                         <>
                                             <button 
                                                 onClick={prev} 
@@ -889,7 +977,7 @@
                             </section>
                             <section className="max-w-2xl mx-auto text-center mt-6 mb-32 px-10 space-y-6">
                                 <h2 className="text-2xl font-light tracking-[0.125em] uppercase border-b border-gray-100 pb-4 inline-block">{collection.descriptionTitle}</h2>
-                                <div className="text-sm font-light leading-relaxed tracking-[0.05em] text-grey-dark" dangerouslySetInnerHTML={{ __html: collection.descriptionBody.replace(/\n/g, '<br/>') }} />
+                                <div className="text-sm font-light leading-relaxed tracking-[0.05em] text-grey-dark" dangerouslySetInnerHTML={{ __html: (collection.descriptionBody || '').replace(/\n/g, '<br/>') }} />
                             </section>
                             <section className="max-w-6xl mx-auto px-10">
                                 <div className="flex justify-between items-end border-b border-gray-50 pb-5 mb-10">
@@ -897,10 +985,10 @@
                                     <p className="text-[10px] text-grey-medium uppercase tracking-[0.1em] font-bold">Limit: {cart.length} / {currentLimit}</p>
                                 </div>
                                 <div className="product-grid">
-                                    {collection.products.map(p => (
+                                    {(collection.products || []).map(p => (
                                         <div key={p.id} className="group cursor-pointer" onClick={() => { setSelectedProd(p); handleNav('product_detail'); }}>
                                             <div className="mb-2 overflow-hidden relative bg-transparent">
-                                                <img src={p.images[0] || 'https://picsum.photos/seed/nuuanu/400/600'} className="w-full aspect-[3/4] object-cover group-hover:scale-110 transition-transform duration-[2000ms]" />
+                                                <img src={(p.images && p.images[0]) || 'https://picsum.photos/seed/nuuanu/400/600'} className="w-full aspect-[3/4] object-cover group-hover:scale-110 transition-transform duration-[2000ms]" />
                                             </div>
                                             <div className="space-y-1">
                                                 <h4 className="text-[12px] font-normal tracking-normal uppercase">{p.name}</h4>
@@ -920,10 +1008,10 @@
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-32">
                                 <div className="space-y-10">
                                     <div className="bg-transparent shadow-2xl overflow-hidden relative">
-                                        <img src={selectedProd.images[0] || 'https://picsum.photos/400/600'} className="w-full h-auto block" />
+                                        <img src={(selectedProd.images && selectedProd.images[0]) || 'https://picsum.photos/400/600'} className="w-full h-auto block" />
                                     </div>
                                     <div className="grid grid-cols-4 gap-6">
-                                        {selectedProd.images.slice(1).map((img, i) => (
+                                        {(selectedProd.images || []).slice(1).map((img, i) => (
                                             <div key={i} className="bg-transparent border border-gray-100 shadow-xl overflow-hidden relative">
                                                 <img src={img} className="w-full h-auto block" />
                                             </div>
@@ -939,7 +1027,7 @@
                                     <div className="space-y-10">
                                         <p className="text-[11px] tracking-[0.125em] uppercase font-bold">Size Preference</p>
                                         <div className="flex flex-wrap gap-5">
-                                            {selectedProd.options.map(s => (
+                                            {(selectedProd.options || []).map(s => (
                                                 <button key={s} onClick={() => setSelectedSize(s)} className={`min-w-[100px] py-4 border tracking-[0.1em] text-[11px] font-bold transition-all ${selectedSize === s ? 'bg-black text-white border-black shadow-2xl scale-110' : 'border-gray-200 hover:border-black'}`}>{s}</button>
                                             ))}
                                         </div>
@@ -1105,7 +1193,7 @@
                 try {
                     await db.collection('collections').doc(docId).delete();
                     setView('select_collection');
-                    notify('Deleted from Cloud', 'success');
+                    notify('컬렉션이 안전하게 삭제되었습니다.', 'success');
                 } catch (err) {
                     notify('Delete Failed', 'error');
                 }
@@ -1129,16 +1217,16 @@
             if (view === 'select_collection') return (
                 <div className="min-h-screen bg-white p-10 sm:p-20 animate-fade-in"><div className="max-w-6xl mx-auto space-y-16"><div className="flex justify-between items-end border-b border-gray-100 pb-10"><div><h2 className="text-[10px] tracking-[0.1em] uppercase text-grey-medium mb-2">Management</h2><h1 className="text-4xl font-light tracking-normal uppercase">Collections</h1></div><button onClick={handleLogout} className="text-[10px] uppercase tracking-[0.075em] border-b border-black pb-1 transition-colors">Logout</button></div><div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
                     {state.collections.map(c => (
-                        <div key={c.id} className="relative group"><div onClick={() => { setActiveCollection(c); setAdminSubView('settings'); setView('admin'); }} className="border border-gray-100 p-12 hover:border-black transition-all cursor-pointer flex flex-col items-center justify-center space-y-6 aspect-square bg-white shadow-sm hover:shadow-xl"><div className="w-16 h-16 bg-transparent flex items-center justify-center rounded-full group-hover:bg-black group-hover:text-white transition-all"><Icons.Package size={24}/></div><div className="text-center font-bold tracking-normal uppercase text-xs">{c.name}</div></div><button onClick={(e)=>{e.stopPropagation(); if(confirm(`Delete "${c.name}"?`)) deleteCollection(c.firebaseId); }} className="absolute top-4 right-4 text-red-100 hover:text-red-500 transition-colors"><Icons.Trash size={16}/></button></div>
+                        <div key={c.id} className="relative group"><div onClick={() => { setActiveCollection(c); setAdminSubView('settings'); setView('admin'); }} className="border border-gray-100 p-12 hover:border-black transition-all cursor-pointer flex flex-col items-center justify-center space-y-6 aspect-square bg-white shadow-sm hover:shadow-xl"><div className="w-16 h-16 bg-transparent flex items-center justify-center rounded-full group-hover:bg-black group-hover:text-white transition-all"><Icons.Package size={24}/></div><div className="text-center font-bold tracking-normal uppercase text-xs">{c.name}</div></div></div>
                     ))}
                     <button onClick={() => setIsCreateModalOpen(true)} className="border border-dashed border-gray-200 p-12 hover:border-black hover:bg-gray-50 flex flex-col items-center justify-center space-y-6 aspect-square group text-gray-300 hover:text-black transition-all"><Icons.Plus size={24}/><span className="text-[10px] uppercase font-bold">New Catalog</span></button>
                 </div></div>
                 {isCreateModalOpen && (<div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 px-6 backdrop-blur-sm" onClick={() => setIsCreateModalOpen(false)}><div className="bg-white p-12 w-full max-w-sm shadow-2xl space-y-12 animate-fade-in" onClick={e => e.stopPropagation()}><h3 className="text-xs font-bold uppercase border-b pb-4 text-center tracking-normal">New Seeding Catalog</h3><input autoFocus type="text" placeholder="NAME" className="w-full border-b border-gray-200 py-4 text-center focus:border-black outline-none uppercase text-sm tracking-normal" value={newCollectionName} onChange={e => setNewCollectionName(e.target.value)} onKeyDown={e => e.key === 'Enter' && createCollection(newCollectionName)} /><button onClick={() => createCollection(newCollectionName)} className="w-full bg-black text-white py-5 text-[10px] uppercase font-bold tracking-[0.1em]">Confirm Create</button></div></div>)}<SyncMonitor /><Toast error={error} success={success} /></div>
             );
 
-            if (view === 'admin' && activeCollection) return (<AdminDashboard collection={activeCollection} collections={state.collections} onUpdate={updateCollection} onBack={() => setView('select_collection')} activeSubView={adminSubView} setSubView={setAdminSubView} notify={notify} adminAccessCode={state.adminAccessCode} updateAdminCode={updateAdminCode} error={error} success={success} onDelete={() => { if(confirm(`Irreversibly delete "${activeCollection.name}"?`)) deleteCollection(activeCollection.firebaseId); }} />);
+            if (view === 'admin' && activeCollection) return (<AdminDashboard collection={activeCollection} collections={state.collections} onUpdate={updateCollection} onBack={() => setView('select_collection')} activeSubView={adminSubView} setSubView={setAdminSubView} notify={notify} adminAccessCode={state.adminAccessCode} updateAdminCode={updateAdminCode} error={error} success={success} onDelete={() => deleteCollection(activeCollection.firebaseId)} />);
             
-            if (view === 'influencer' && activeCollection) return (<InfluencerPage collection={activeCollection} cart={cart} setCart={setCart} onLogout={handleLogout} notify={notify} scrollPosRef={scrollPosRef} onSubmission={entries => updateCollection({ ...activeCollection, shippingEntries: [...activeCollection.shippingEntries, ...entries] })} error={error} success={success} loginCode={accessCodeInput} />);
+            if (view === 'influencer' && activeCollection) return (<InfluencerPage collection={activeCollection} cart={cart} setCart={setCart} onLogout={handleLogout} notify={notify} scrollPosRef={scrollPosRef} onSubmission={entries => updateCollection({ ...activeCollection, shippingEntries: [...(activeCollection.shippingEntries || []), ...entries] })} error={error} success={success} loginCode={accessCodeInput} />);
             
             return null;
         };
