@@ -32,8 +32,6 @@
       }
     </script>
 
-    <!-- Firebase SDK Loaded dynamically via modules -->
-    
     <!-- Google Fonts: Inter -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;700&display=swap" rel="stylesheet">
     
@@ -789,9 +787,9 @@
                                                         </td>
                                                         <td className="p-6 text-right">
                                                             <div className="flex justify-end space-x-3">
-                                                                <button onClick={() => handleCopyRow(e)} className="p-2 bg-black text-white hover:bg-black/80 transition-transform rounded flex items-center justify-center" title="Copy Row"><Icons.Copy size={18}/></button>
+                                                                <button onClick={() => handleCopyRow(e)} className="p-2 bg-black text-white hover:bg-black/80 transition-transform rounded flex items-center justify-center cursor-pointer" title="Copy Row"><Icons.Copy size={18}/></button>
                                                                 {e.isManual && (
-                                                                    <button onClick={() => handleDeleteRow(e.id)} className="p-2 bg-black text-white hover:bg-red-600 transition-transform rounded flex items-center justify-center" title="Delete Row"><Icons.Trash size={18}/></button>
+                                                                    <button onClick={() => handleDeleteRow(e.id)} className="p-2 bg-black text-white hover:bg-red-600 transition-transform rounded flex items-center justify-center cursor-pointer" title="Delete Row"><Icons.Trash size={18}/></button>
                                                                 )}
                                                             </div>
                                                         </td>
@@ -861,6 +859,7 @@
             const [activeSlide, setActiveSlide] = useState(0);
             const [selectedProd, setSelectedProd] = useState(null);
             const [selectedSize, setSelectedSize] = useState('');
+            const [activeImageIndex, setActiveImageIndex] = useState(0);
             const [formData, setFormData] = useState({ instagramId: '', name: '', phone: '', address: '', message: '', extra: '', agreed: false });
             
             const [touchStart, setTouchStart] = useState(null);
@@ -939,7 +938,7 @@
                     <Icons.Success size={80} strokeWidth={1}/>
                     <h2 className="text-2xl font-light tracking-[0.1em] uppercase">Complete</h2>
                     <p className="text-sm font-light text-grey-medium max-w-sm">Thank you, nuuanu girl! We love having you as part of our journey✨</p>
-                    <button onClick={onLogout} className="text-[10px] tracking-[0.125em] border-b border-black pb-1 uppercase font-bold">Sign Out</button>
+                    <button onClick={onLogout} className="text-[10px] tracking-[0.125em] border-b border-black pb-1 uppercase font-bold cursor-pointer">Sign Out</button>
                 </div>
             );
 
@@ -948,11 +947,11 @@
                     <header className="px-10 py-10 sticky top-0 bg-white/95 backdrop-blur-md z-40 flex justify-between items-center border-b border-gray-50">
                         <h1 className="text-2xl font-light tracking-[0.125em] uppercase cursor-pointer" onClick={() => handleNav('lookbook')}>nuuanu</h1>
                         <div className="flex items-center space-x-4">
-                            <button onClick={() => handleNav('cart')} className="relative flex items-center transition-transform active:scale-90 p-1">
+                            <button onClick={() => handleNav('cart')} className="relative flex items-center transition-transform active:scale-90 p-1 cursor-pointer">
                                 <Icons.ShoppingBag size={28} />
                                 {cart.length > 0 && <span className="absolute -top-1 -right-1 bg-black text-white text-[8px] w-4 h-4 rounded-full flex items-center justify-center font-bold">{cart.length}</span>}
                             </button>
-                            <button onClick={onLogout} className="flex items-center transition-transform active:scale-90 p-1 text-grey-medium hover:text-black">
+                            <button onClick={onLogout} className="flex items-center transition-transform active:scale-90 p-1 text-grey-medium hover:text-black cursor-pointer">
                                 <Icons.LogOut size={26} />
                             </button>
                         </div>
@@ -983,15 +982,15 @@
                                         <>
                                             <button 
                                                 onClick={prev} 
-                                                className="absolute left-4 top-1/2 -translate-y-1/2 z-30 p-4 bg-white/10 hover:bg-white/30 backdrop-blur-sm rounded-full transition-all text-white drop-shadow-lg hidden md:flex items-center justify-center"
+                                                className="absolute left-3 md:left-6 top-1/2 -translate-y-1/2 z-30 p-2.5 md:p-4 bg-black/25 hover:bg-black/45 backdrop-blur-md rounded-full transition-all text-white drop-shadow-md flex items-center justify-center cursor-pointer"
                                             >
-                                                <Icons.ChevronLeft size={36} strokeWidth={2} />
+                                                <Icons.ChevronLeft width={20} height={20} className="md:w-8 md:h-8" strokeWidth={2} />
                                             </button>
                                             <button 
                                                 onClick={next} 
-                                                className="absolute right-4 top-1/2 -translate-y-1/2 z-30 p-4 bg-white/10 hover:bg-white/30 backdrop-blur-sm rounded-full transition-all text-white drop-shadow-lg hidden md:flex items-center justify-center"
+                                                className="absolute right-3 md:right-6 top-1/2 -translate-y-1/2 z-30 p-2.5 md:p-4 bg-black/25 hover:bg-black/45 backdrop-blur-md rounded-full transition-all text-white drop-shadow-md flex items-center justify-center cursor-pointer"
                                             >
-                                                <Icons.ChevronRight size={36} strokeWidth={2} />
+                                                <Icons.ChevronRight width={20} height={20} className="md:w-8 md:h-8" strokeWidth={2} />
                                             </button>
                                         </>
                                     )}
@@ -1008,7 +1007,7 @@
                                 </div>
                                 <div className="product-grid">
                                     {(collection.products || []).map(p => (
-                                        <div key={p.id} className="group cursor-pointer" onClick={() => { setSelectedProd(p); handleNav('product_detail'); }}>
+                                        <div key={p.id} className="group cursor-pointer" onClick={() => { setSelectedProd(p); setActiveImageIndex(0); setSelectedSize(''); handleNav('product_detail'); }}>
                                             <div className="mb-2 overflow-hidden relative bg-transparent">
                                                 <img src={(p.images && p.images[0]) || 'https://picsum.photos/seed/nuuanu/400/600'} className="w-full aspect-[3/4] object-cover group-hover:scale-110 transition-transform duration-[2000ms]" />
                                             </div>
@@ -1024,38 +1023,44 @@
                     )}
                     {view === 'product_detail' && selectedProd && (
                         <main className="max-w-6xl mx-auto px-10 pt-16 animate-fade-in">
-                            <button onClick={() => handleNav('lookbook')} className="text-[11px] tracking-[0.1em] uppercase mb-24 flex items-center hover:text-gray-400 font-bold">
+                            <button onClick={() => handleNav('lookbook')} className="text-[11px] tracking-[0.1em] uppercase mb-24 flex items-center hover:text-gray-400 font-bold cursor-pointer">
                                 <Icons.ChevronLeft size={18} className="mr-1" /> Back
                             </button>
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-32">
                                 <div className="space-y-10">
                                     <div className="bg-transparent shadow-2xl overflow-hidden relative">
-                                        <img src={(selectedProd.images && selectedProd.images[0]) || 'https://picsum.photos/400/600'} className="w-full h-auto block" />
+                                        <img src={(selectedProd.images && selectedProd.images[activeImageIndex]) || 'https://picsum.photos/400/600'} className="w-full h-auto block" />
                                     </div>
                                     <div className="grid grid-cols-4 gap-6">
-                                        {(selectedProd.images || []).slice(1).map((img, i) => (
-                                            <div key={i} className="bg-transparent border border-gray-100 shadow-xl overflow-hidden relative">
-                                                <img src={img} className="w-full h-auto block" />
+                                        {(selectedProd.images || []).map((img, i) => (
+                                            <div key={i} onClick={() => setActiveImageIndex(i)} className={`cursor-pointer bg-transparent border shadow-sm overflow-hidden aspect-[2/3] relative transition-all duration-200 ${activeImageIndex === i ? 'border-black ring-1 ring-black scale-95' : 'border-gray-100 hover:border-gray-400 opacity-70 hover:opacity-100'}`}>
+                                                <img src={img} className="w-full h-full object-cover block" />
                                             </div>
                                         ))}
                                     </div>
                                 </div>
                                 <div className="space-y-20">
                                     <div className="border-b pb-12 border-gray-100">
-                                        <h2 className="text-2xl font-light tracking-[0.075em] uppercase mb-4">{selectedProd.name}</h2>
+                                        <h2 className="text-xl font-light tracking-tight uppercase mb-4">{selectedProd.name}</h2>
                                         <p className="text-grey-medium tracking-[0.125em] text-sm uppercase font-light mb-8">KRW {selectedProd.price}</p>
                                         <div className="text-sm leading-relaxed text-grey-dark font-light" dangerouslySetInnerHTML={{ __html: (selectedProd.description || '').replace(/\n/g, '<br/>') }} />
                                     </div>
                                     <div className="space-y-10">
                                         <p className="text-[11px] tracking-[0.125em] uppercase font-bold">Size Preference</p>
-                                        <div className="flex flex-wrap gap-5">
+                                        <div className="flex flex-wrap gap-2 sm:gap-3">
                                             {(selectedProd.options || []).map(s => (
-                                                <button key={s} onClick={() => setSelectedSize(s)} className={`min-w-[100px] py-4 border tracking-[0.1em] text-[11px] font-bold transition-all ${selectedSize === s ? 'bg-black text-white border-black shadow-2xl scale-110' : 'border-gray-200 hover:border-black'}`}>{s}</button>
+                                                <button 
+                                                    key={s} 
+                                                    onClick={() => setSelectedSize(s)} 
+                                                    className={`w-14 h-10 sm:w-16 sm:h-11 rounded-full border text-[11px] font-bold tracking-[0.05em] uppercase transition-all flex items-center justify-center cursor-pointer ${selectedSize === s ? 'bg-black text-white border-black shadow-lg scale-105' : 'border-gray-200 hover:border-black bg-white text-black'}`}
+                                                >
+                                                    {s}
+                                                </button>
                                             ))}
                                         </div>
                                     </div>
                                     <div className="pt-10">
-                                        <button onClick={addToCart} className="w-full bg-black text-white py-8 text-[11px] tracking-[0.15em] font-bold shadow-2xl active:scale-[0.98] uppercase">Add to My Selection</button>
+                                        <button onClick={addToCart} className="w-full bg-black text-white py-8 text-[11px] tracking-[0.15em] font-bold shadow-2xl active:scale-[0.98] uppercase cursor-pointer">Add to My Selection</button>
                                     </div>
                                 </div>
                             </div>
@@ -1063,7 +1068,7 @@
                     )}
                     {view === 'cart' && (
                         <main className="max-w-2xl mx-auto px-10 pt-16 animate-fade-in">
-                            <button onClick={() => handleNav('lookbook')} className="text-[11px] tracking-[0.1em] uppercase mb-24 flex items-center hover:text-gray-400 font-bold"><Icons.ChevronLeft size={18} className="mr-1" /> Back</button>
+                            <button onClick={() => handleNav('lookbook')} className="text-[11px] tracking-[0.1em] uppercase mb-24 flex items-center hover:text-gray-400 font-bold cursor-pointer"><Icons.ChevronLeft size={18} className="mr-1" /> Back</button>
                             <div className="flex justify-between items-end border-b pb-10 mb-20 border-gray-100">
                                 <h2 className="text-xs font-bold uppercase tracking-[0.125em]">Selected List</h2>
                                 <p className="text-[10px] text-grey-medium font-bold uppercase tracking-[0.05em]">{cart.length} / {currentLimit}</p>
@@ -1078,7 +1083,7 @@
                                             <h4 className="text-[12px] font-normal uppercase mb-3">{item.productName}</h4>
                                             <p className="text-[10px] text-grey-medium tracking-[0.1em] uppercase">Size: <span className="text-black ml-2 font-bold">{item.size}</span></p>
                                         </div>
-                                        <button onClick={() => setCart(cart.filter((_, idx) => idx !== i))} className="text-gray-300 hover:text-red-500 transition-all p-4"><Icons.X size={24} /></button>
+                                        <button onClick={() => setCart(cart.filter((_, idx) => idx !== i))} className="text-gray-300 hover:text-red-500 transition-all p-4 cursor-pointer"><Icons.X size={24} /></button>
                                     </div>
                                 ))}
                             </div>
@@ -1101,7 +1106,7 @@
                                             *재고 상황 등에 따라 일부 내용이 달라질 수 있으며, 올려주신 콘텐츠는 브랜드 소개나 홍보에 활용될 수 있음에 동의합니다.
                                         </label>
                                     </div>
-                                    <button onClick={submit} className="w-full bg-black text-white py-8 text-[11px] tracking-[0.15em] font-bold shadow-2xl disabled:opacity-30 uppercase transition-all" disabled={!cart.length || !formData.agreed}>제출하기</button>
+                                    <button onClick={submit} className="w-full bg-black text-white py-8 text-[11px] tracking-[0.15em] font-bold shadow-2xl disabled:opacity-30 uppercase transition-all cursor-pointer" disabled={!cart.length || !formData.agreed}>제출하기</button>
                                 </div>
                             </div>
                         </main>
@@ -1234,17 +1239,17 @@
             );
             
             if (view === 'login') return (
-                <div className="min-h-screen flex items-center justify-center p-6 bg-white animate-fade-in"><div className="max-w-md w-full text-center space-y-20"><h1 className="text-6xl font-light tracking-[0.1em] uppercase">nuuanu</h1><div className="space-y-6"><input type="text" placeholder="ACCESS CODE" className="w-full border-b border-gray-200 py-4 text-center focus:outline-none focus:border-black tracking-[0.075em] uppercase text-sm bg-transparent transition-colors" value={accessCodeInput} onChange={e => setAccessCodeInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleLogin()} autoFocus /><button onClick={handleLogin} className="w-full bg-black text-white py-5 text-[10px] tracking-[0.125em] uppercase font-bold transition-all hover:bg-black/90 active:scale-95">Entrance</button></div></div><Toast error={error} success={success} /></div>
+                <div className="min-h-screen flex items-center justify-center p-6 bg-white animate-fade-in"><div className="max-w-md w-full text-center space-y-20"><h1 className="text-6xl font-light tracking-[0.1em] uppercase">nuuanu</h1><div className="space-y-6"><input type="text" placeholder="ACCESS CODE" className="w-full border-b border-gray-200 py-4 text-center focus:outline-none focus:border-black tracking-[0.075em] uppercase text-sm bg-transparent transition-colors" value={accessCodeInput} onChange={e => setAccessCodeInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleLogin()} autoFocus /><button onClick={handleLogin} className="w-full bg-black text-white py-5 text-[10px] tracking-[0.125em] uppercase font-bold transition-all hover:bg-black/90 active:scale-95 cursor-pointer">Entrance</button></div></div><Toast error={error} success={success} /></div>
             );
 
             if (view === 'select_collection') return (
-                <div className="min-h-screen bg-white p-10 sm:p-20 animate-fade-in"><div className="max-w-6xl mx-auto space-y-16"><div className="flex justify-between items-end border-b border-gray-100 pb-10"><div><h2 className="text-[10px] tracking-[0.1em] uppercase text-grey-medium mb-2">Management</h2><h1 className="text-4xl font-light tracking-normal uppercase">Collections</h1></div><button onClick={handleLogout} className="text-[10px] uppercase tracking-[0.075em] border-b border-black pb-1 transition-colors">Logout</button></div><div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+                <div className="min-h-screen bg-white p-10 sm:p-20 animate-fade-in"><div className="max-w-6xl mx-auto space-y-16"><div className="flex justify-between items-end border-b border-gray-100 pb-10"><div><h2 className="text-[10px] tracking-[0.1em] uppercase text-grey-medium mb-2">Management</h2><h1 className="text-4xl font-light tracking-normal uppercase">Collections</h1></div><button onClick={handleLogout} className="text-[10px] uppercase tracking-[0.075em] border-b border-black pb-1 transition-colors cursor-pointer">Logout</button></div><div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
                     {state.collections.map(c => (
                         <div key={c.id} className="relative group"><div onClick={() => { setActiveCollection(c); setAdminSubView('settings'); setView('admin'); }} className="border border-gray-100 p-12 hover:border-black transition-all cursor-pointer flex flex-col items-center justify-center space-y-6 aspect-square bg-white shadow-sm hover:shadow-xl"><div className="w-16 h-16 bg-transparent flex items-center justify-center rounded-full group-hover:bg-black group-hover:text-white transition-all"><Icons.Package size={24}/></div><div className="text-center font-bold tracking-normal uppercase text-xs">{c.name}</div></div></div>
                     ))}
-                    <button onClick={() => setIsCreateModalOpen(true)} className="border border-dashed border-gray-200 p-12 hover:border-black hover:bg-gray-50 flex flex-col items-center justify-center space-y-6 aspect-square group text-gray-300 hover:text-black transition-all"><Icons.Plus size={24}/><span className="text-[10px] uppercase font-bold">New Catalog</span></button>
+                    <button onClick={() => setIsCreateModalOpen(true)} className="border border-dashed border-gray-200 p-12 hover:border-black hover:bg-gray-50 flex flex-col items-center justify-center space-y-6 aspect-square group text-gray-300 hover:text-black transition-all cursor-pointer"><Icons.Plus size={24}/><span className="text-[10px] uppercase font-bold">New Catalog</span></button>
                 </div></div>
-                {isCreateModalOpen && (<div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 px-6 backdrop-blur-sm" onClick={() => setIsCreateModalOpen(false)}><div className="bg-white p-12 w-full max-w-sm shadow-2xl space-y-12 animate-fade-in" onClick={e => e.stopPropagation()}><h3 className="text-xs font-bold uppercase border-b pb-4 text-center tracking-normal">New Seeding Catalog</h3><input autoFocus type="text" placeholder="NAME" className="w-full border-b border-gray-200 py-4 text-center focus:border-black outline-none uppercase text-sm tracking-normal" value={newCollectionName} onChange={e => setNewCollectionName(e.target.value)} onKeyDown={e => e.key === 'Enter' && createCollection(newCollectionName)} /><button onClick={() => createCollection(newCollectionName)} className="w-full bg-black text-white py-5 text-[10px] uppercase font-bold tracking-[0.1em]">Confirm Create</button></div></div>)}<SyncMonitor /><Toast error={error} success={success} /></div>
+                {isCreateModalOpen && (<div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 px-6 backdrop-blur-sm" onClick={() => setIsCreateModalOpen(false)}><div className="bg-white p-12 w-full max-w-sm shadow-2xl space-y-12 animate-fade-in" onClick={e => e.stopPropagation()}><h3 className="text-xs font-bold uppercase border-b pb-4 text-center tracking-normal">New Seeding Catalog</h3><input autoFocus type="text" placeholder="NAME" className="w-full border-b border-gray-200 py-4 text-center focus:border-black outline-none uppercase text-sm tracking-normal" value={newCollectionName} onChange={e => setNewCollectionName(e.target.value)} onKeyDown={e => e.key === 'Enter' && createCollection(newCollectionName)} /><button onClick={() => createCollection(newCollectionName)} className="w-full bg-black text-white py-5 text-[10px] uppercase font-bold tracking-[0.1em] cursor-pointer">Confirm Create</button></div></div>)}<SyncMonitor /><Toast error={error} success={success} /></div>
             );
 
             if (view === 'admin' && activeCollection) return (<AdminDashboard collection={activeCollection} collections={state.collections} onUpdate={updateCollection} onBack={() => setView('select_collection')} activeSubView={adminSubView} setSubView={setAdminSubView} notify={notify} adminAccessCode={state.adminAccessCode} updateAdminCode={updateAdminCode} error={error} success={success} onDelete={() => deleteCollection(activeCollection.firebaseId)} />);
