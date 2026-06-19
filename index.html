@@ -21,6 +21,17 @@
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
+    <!-- Importmap for resolving react/jsx-runtime and React in browser-compiled modules -->
+    <script type="importmap">
+      {
+        "imports": {
+          "react": "https://esm.sh/react@18.2.0",
+          "react-dom": "https://esm.sh/react-dom@18.2.0",
+          "react/jsx-runtime": "https://esm.sh/react@18.2.0/jsx-runtime"
+        }
+      }
+    </script>
+
     <!-- Firebase SDK Loaded dynamically via modules -->
     
     <!-- Google Fonts: Inter -->
