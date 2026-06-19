@@ -239,6 +239,13 @@
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" {...props}>
                     <circle cx="12" cy="12" r="10"/><polyline points="9 11 12 14 15 9"/>
                 </svg>
+            ),
+            Archive: (props) => (
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" {...props}>
+                    <rect width="20" height="5" x="2" y="3" rx="1"/>
+                    <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/>
+                    <line x1="10" x2="14" y1="12" y2="12"/>
+                </svg>
             )
         };
 
@@ -341,6 +348,7 @@
             const [sortConfig, setSortConfig] = useState({ key: 'submitDate', direction: 'desc' });
             const [isUploading, setIsUploading] = useState(false);
             const [draggedIdx, setDraggedIdx] = useState(null);
+            const [showArchived, setShowArchived] = useState(false);
 
             const handleDragStart = (e, idx) => {
                 setDraggedIdx(idx);
@@ -466,7 +474,12 @@
             const shippingEntries = collection.shippingEntries || [];
 
             const sortedShipping = useMemo(() => {
-                const data = [...shippingEntries];
+                let data = [...shippingEntries];
+                if (showArchived) {
+                    data = data.filter(e => !!e.isArchived);
+                } else {
+                    data = data.filter(e => !e.isArchived);
+                }
                 if (!sortConfig.key) return data;
                 return data.sort((a, b) => {
                     const valA = String(a[sortConfig.key] || '').toLowerCase();
@@ -475,13 +488,21 @@
                     if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
                     return 0;
                 });
-            }, [shippingEntries, sortConfig]);
+            }, [shippingEntries, sortConfig, showArchived]);
 
             const handleBulkStatusChange = (newStatus) => {
                 if (selectedRows.size === 0) return;
                 const next = shippingEntries.map(e => selectedRows.has(e.id) ? { ...e, status: newStatus } : e);
                 handleUpdate({ shippingEntries: next });
                 setSelectedRows(new Set());
+            };
+
+            const handleBulkArchive = (archiveBool) => {
+                if (selectedRows.size === 0) return;
+                const next = shippingEntries.map(e => selectedRows.has(e.id) ? { ...e, isArchived: archiveBool } : e);
+                handleUpdate({ shippingEntries: next });
+                setSelectedRows(new Set());
+                notify(archiveBool ? '주문이 보관 처리되었습니다.' : '주문이 복원 처리되었습니다.', 'success');
             };
 
             const toggleRow = (id) => {
@@ -728,8 +749,8 @@
                                         {accessCodes.map((ac, idx) => {
                                             const isUnique = isCodeGloballyUnique(ac.code, collection.id, accessCodes);
                                             return (
-                                                <div key={idx} className={`flex flex-col sm:flex-row items-center gap-10 p-8 border transition-colors ${!isUnique ? 'border-red-500 bg-red-50' : 'bg-gray-50/30'}`}>
-                                                    <div className="flex-1 space-y-4 w-full">
+                                                <div key={idx} className={`flex flex-col xl:flex-row items-stretch xl:items-end gap-6 p-8 border transition-colors ${!isUnique ? 'border-red-500 bg-red-50' : 'bg-gray-50/30'}`}>
+                                                    <div className="flex-1 space-y-4 min-w-[200px]">
                                                         <label className="text-[12px] text-grey-light uppercase tracking-normal font-bold">Code</label>
                                                         <div className="relative">
                                                             <input type="text" className={`w-full bg-white border-b-2 py-3 px-3 outline-none text-[16px] uppercase font-bold transition-colors ${!isUnique ? 'border-red-500 focus:border-red-600' : 'focus:border-black'}`} value={ac.code} onChange={e => {
@@ -740,23 +761,52 @@
                                                             {!isUnique && <div className="mt-2 text-[10px] text-red-600 font-bold uppercase tracking-tight flex items-center"><Icons.Alert size={14} className="mr-1"/> 이미 사용 중인 코드입니다.</div>}
                                                         </div>
                                                     </div>
-                                                    <div className="w-full sm:w-48 space-y-4">
+                                                    <div className="flex items-center space-x-2 pt-2 xl:pb-3">
+                                                        <label className="flex items-center space-x-2 text-[12px] font-bold uppercase cursor-pointer select-none">
+                                                            <input 
+                                                                type="checkbox" 
+                                                                checked={!!ac.isUnlimited} 
+                                                                onChange={e => {
+                                                                    const codes = [...accessCodes];
+                                                                    codes[idx].isUnlimited = e.target.checked;
+                                                                    handleUpdate({ accessCodesV2: codes }, true);
+                                                                }} 
+                                                                className="accent-black w-4 h-4 rounded" 
+                                                            />
+                                                            <span className="text-[12px] font-bold uppercase tracking-wide">Unlimited / 무제한</span>
+                                                        </label>
+                                                    </div>
+                                                    <div className={`w-full sm:w-48 space-y-4 ${ac.isUnlimited ? 'opacity-40' : ''}`}>
                                                         <label className="text-[12px] text-grey-light uppercase tracking-normal font-bold">Main Limit</label>
-                                                        <input type="number" className="w-full bg-white border-b-2 py-3 px-3 focus:border-black outline-none text-[16px] font-medium" value={ac.limitMain !== undefined ? ac.limitMain : (ac.limit || 3)} onChange={e => {
-                                                            const codes = [...accessCodes];
-                                                            codes[idx].limitMain = parseInt(e.target.value) || 0;
-                                                            handleUpdate({ accessCodesV2: codes }, true);
-                                                        }} />
+                                                        <input 
+                                                            type="number" 
+                                                            disabled={!!ac.isUnlimited}
+                                                            className="w-full bg-white border-b-2 py-3 px-3 focus:border-black outline-none text-[16px] font-medium" 
+                                                            value={ac.isUnlimited ? '' : (ac.limitMain !== undefined ? ac.limitMain : (ac.limit || 3))} 
+                                                            placeholder="∞"
+                                                            onChange={e => {
+                                                                const codes = [...accessCodes];
+                                                                codes[idx].limitMain = parseInt(e.target.value) || 0;
+                                                                handleUpdate({ accessCodesV2: codes }, true);
+                                                            }} 
+                                                        />
                                                     </div>
-                                                    <div className="w-full sm:w-48 space-y-4">
+                                                    <div className={`w-full sm:w-48 space-y-4 ${ac.isUnlimited ? 'opacity-40' : ''}`}>
                                                         <label className="text-[12px] text-grey-light uppercase tracking-normal font-bold">Underwear Limit</label>
-                                                        <input type="number" className="w-full bg-white border-b-2 py-3 px-3 focus:border-black outline-none text-[16px] font-medium" value={ac.limitUnderwear !== undefined ? ac.limitUnderwear : 2} onChange={e => {
-                                                            const codes = [...accessCodes];
-                                                            codes[idx].limitUnderwear = parseInt(e.target.value) || 0;
-                                                            handleUpdate({ accessCodesV2: codes }, true);
-                                                        }} />
+                                                        <input 
+                                                            type="number" 
+                                                            disabled={!!ac.isUnlimited}
+                                                            className="w-full bg-white border-b-2 py-3 px-3 focus:border-black outline-none text-[16px] font-medium" 
+                                                            value={ac.isUnlimited ? '' : (ac.limitUnderwear !== undefined ? ac.limitUnderwear : 2)} 
+                                                            placeholder="∞"
+                                                            onChange={e => {
+                                                                const codes = [...accessCodes];
+                                                                codes[idx].limitUnderwear = parseInt(e.target.value) || 0;
+                                                                handleUpdate({ accessCodesV2: codes }, true);
+                                                            }} 
+                                                        />
                                                     </div>
-                                                    <button onClick={() => handleUpdate({ accessCodesV2: accessCodes.filter((_, i) => i !== idx) })} className="p-3 bg-black text-white hover:bg-black/80 transition-colors rounded self-end"><Icons.Trash size={20}/></button>
+                                                    <button onClick={() => handleUpdate({ accessCodesV2: accessCodes.filter((_, i) => i !== idx) })} className="p-3 bg-black text-white hover:bg-black/80 transition-colors rounded self-stretch xl:self-end flex items-center justify-center cursor-pointer mt-4 xl:mt-0 xl:h-[50px]"><Icons.Trash size={20}/></button>
                                                 </div>
                                             );
                                         })}
@@ -874,18 +924,39 @@
                         )}
                         {activeSubView === 'shipping' && (
                             <div className="space-y-8 animate-fade-in">
-                                <div className="flex justify-between items-center border-b pb-8">
-                                    <h3 className="text-[15px] font-bold uppercase tracking-[0.1em]">Tracking Table</h3>
-                                    <div className="flex space-x-6 items-center">
+                                <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center border-b pb-8 gap-4">
+                                    <div className="flex items-center space-x-6">
+                                        <h3 className="text-[15px] font-bold uppercase tracking-[0.1em]">Tracking Table</h3>
+                                        <div className="flex bg-gray-100 rounded p-1 text-xs">
+                                            <button 
+                                                onClick={() => { setShowArchived(false); setSelectedRows(new Set()); }} 
+                                                className={`px-4 py-1.5 uppercase font-bold rounded transition-all cursor-pointer ${!showArchived ? 'bg-white text-black shadow-sm' : 'text-gray-400 hover:text-black'}`}
+                                            >
+                                                Active
+                                            </button>
+                                            <button 
+                                                onClick={() => { setShowArchived(true); setSelectedRows(new Set()); }} 
+                                                className={`px-4 py-1.5 uppercase font-bold rounded transition-all cursor-pointer ${showArchived ? 'bg-white text-black shadow-sm' : 'text-gray-400 hover:text-black'}`}
+                                            >
+                                                Archived
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-4">
                                         {selectedRows.size > 0 && (
-                                            <div className="flex space-x-3 bg-gray-50 p-3 rounded items-center">
-                                                <span className="text-[14px] uppercase font-bold text-grey-medium px-4">{selectedRows.size} selected</span>
-                                                <button onClick={() => handleBulkStatusChange('배송완료')} className="text-[14px] font-bold uppercase bg-black text-white px-6 py-3 transition-colors hover:bg-black/90">Set Delivered</button>
-                                                <button onClick={() => handleBulkStatusChange('준비중')} className="text-[14px] font-bold uppercase border-2 border-black px-6 py-3 transition-colors hover:bg-black hover:text-white">Set Preparing</button>
+                                            <div className="flex flex-wrap gap-2 bg-gray-50 p-2.5 rounded items-center border">
+                                                <span className="text-[13px] uppercase font-bold text-grey-medium px-2">{selectedRows.size} selected</span>
+                                                <button onClick={() => handleBulkStatusChange('배송완료')} className="text-[12px] font-bold uppercase bg-black text-white px-4 py-2 hover:bg-black/80 transition-colors">Set Delivered</button>
+                                                <button onClick={() => handleBulkStatusChange('준비중')} className="text-[12px] font-bold uppercase border border-black px-4 py-2 hover:bg-black hover:text-white transition-colors">Set Preparing</button>
+                                                {showArchived ? (
+                                                    <button onClick={() => handleBulkArchive(false)} className="text-[12px] font-bold uppercase bg-blue-600 text-white px-4 py-2 hover:bg-blue-700 transition-colors">Restore Selected</button>
+                                                ) : (
+                                                    <button onClick={() => handleBulkArchive(true)} className="text-[12px] font-bold uppercase bg-purple-600 text-white px-4 py-2 hover:bg-purple-700 transition-colors">Archive Selected</button>
+                                                )}
                                             </div>
                                         )}
-                                        <button onClick={handleExport} className="text-[14px] font-bold uppercase border-2 border-black px-10 py-3 hover:bg-black hover:text-white transition-all">
-                                            {selectedRows.size > 0 ? `Export ${selectedRows.size} Selected` : 'Export All CSV'}
+                                        <button onClick={handleExport} className="text-[12px] font-bold uppercase border-2 border-black px-6 py-2.5 hover:bg-black hover:text-white transition-all">
+                                            {selectedRows.size > 0 ? `Export ${selectedRows.size} Selected` : 'Export CSV'}
                                         </button>
                                     </div>
                                 </div>
@@ -954,6 +1025,17 @@
                                                         <td className="p-6 text-right">
                                                             <div className="flex justify-end space-x-3">
                                                                 <button onClick={() => handleCopyRow(e)} className="p-2 bg-black text-white hover:bg-black/80 transition-transform rounded flex items-center justify-center cursor-pointer" title="Copy Row"><Icons.Copy size={18}/></button>
+                                                                <button 
+                                                                    onClick={() => {
+                                                                        const next = shippingEntries.map(x => x.id === e.id ? { ...x, isArchived: !e.isArchived } : x);
+                                                                        handleUpdate({ shippingEntries: next });
+                                                                        notify(e.isArchived ? '주문이 활성 상태로 복원되었습니다.' : '주문이 보관 처리되었습니다.', 'success');
+                                                                    }} 
+                                                                    className="p-2 bg-gray-100 hover:bg-gray-200 text-gray-700 transition-transform rounded flex items-center justify-center cursor-pointer" 
+                                                                    title={e.isArchived ? 'Restore' : 'Archive'}
+                                                                >
+                                                                    <Icons.Archive size={18} className={e.isArchived ? 'text-blue-600' : 'text-gray-600'} />
+                                                                </button>
                                                                 {e.isManual && (
                                                                     <button onClick={() => handleDeleteRow(e.id)} className="p-2 bg-black text-white hover:bg-red-600 transition-transform rounded flex items-center justify-center cursor-pointer" title="Delete Row"><Icons.Trash size={18}/></button>
                                                                 )}
@@ -1066,6 +1148,10 @@
                 return acs.find(a => a.code && a.code.toLowerCase().trim() === loginCode.toLowerCase().trim());
             }, [collection, loginCode]);
 
+            const isUnlimited = useMemo(() => {
+                return !!(matchedAccessCodeObj && matchedAccessCodeObj.isUnlimited);
+            }, [matchedAccessCodeObj]);
+
             const limitMain = useMemo(() => {
                 if (!matchedAccessCodeObj) return 3;
                 if (matchedAccessCodeObj.limitMain !== undefined) return matchedAccessCodeObj.limitMain;
@@ -1127,15 +1213,17 @@
                 if(!selectedProd || !selectedSize) { alert('Select size preference'); return; } 
                 
                 const prodSubCol = selectedProd.subCollection || 'main';
-                if (prodSubCol === 'underwear') {
-                    if (selectedUnderwearCount >= limitUnderwear) {
-                        alert(`${subCollectionNameUnderwear}은(는) 최대 ${limitUnderwear}개까지만 선택할 수 있습니다.`);
-                        return;
-                    }
-                } else {
-                    if (selectedMainCount >= limitMain) {
-                        alert(`${subCollectionNameMain}은(는) 최대 ${limitMain}개까지만 선택할 수 있습니다.`);
-                        return;
+                if (!isUnlimited) {
+                    if (prodSubCol === 'underwear') {
+                        if (selectedUnderwearCount >= limitUnderwear) {
+                            alert(`${subCollectionNameUnderwear}은(는) 최대 ${limitUnderwear}개까지만 선택할 수 있습니다.`);
+                            return;
+                        }
+                    } else {
+                        if (selectedMainCount >= limitMain) {
+                            alert(`${subCollectionNameMain}은(는) 최대 ${limitMain}개까지만 선택할 수 있습니다.`);
+                            return;
+                        }
                     }
                 }
 
@@ -1211,9 +1299,11 @@
                                     <h3 className="text-[11px] font-bold uppercase tracking-[0.1em] text-black">
                                         {activePackage === 'underwear' ? subCollectionNameUnderwear : subCollectionNameMain}
                                     </h3>
-                                    <p className="text-[10px] uppercase tracking-[0.05em] text-grey-medium font-bold">
-                                        {activePackage === 'underwear' ? `${selectedUnderwearCount} / ${limitUnderwear}` : `${selectedMainCount} / ${limitMain}`} Items Selected
-                                    </p>
+                                    {!isUnlimited && (
+                                        <p className="text-[10px] uppercase tracking-[0.05em] text-grey-medium font-bold">
+                                            {activePackage === 'underwear' ? `${selectedUnderwearCount} / ${limitUnderwear}` : `${selectedMainCount} / ${limitMain}`} Items Selected
+                                        </p>
+                                    )}
                                 </div>
                             </div>
                         )}
@@ -1278,9 +1368,11 @@
                                             />
                                             <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent pt-32 pb-8 px-8 flex flex-col justify-end text-left h-full">
                                                 <h4 className="text-white text-md font-bold uppercase tracking-wider mb-2">{subCollectionNameMain}</h4>
-                                                <p className="text-white/80 text-xs font-bold uppercase tracking-[0.075em]">
-                                                    LIMIT {selectedMainCount}/{limitMain}
-                                                </p>
+                                                {!isUnlimited && (
+                                                    <p className="text-white/80 text-xs font-bold uppercase tracking-[0.075em]">
+                                                        LIMIT {selectedMainCount}/{limitMain}
+                                                    </p>
+                                                )}
                                             </div>
                                         </div>
 
@@ -1295,9 +1387,11 @@
                                             />
                                             <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent pt-32 pb-8 px-8 flex flex-col justify-end text-left h-full">
                                                 <h4 className="text-white text-md font-bold uppercase tracking-wider mb-2">{subCollectionNameUnderwear}</h4>
-                                                <p className="text-white/80 text-xs font-bold uppercase tracking-[0.075em]">
-                                                    LIMIT {selectedUnderwearCount}/{limitUnderwear}
-                                                </p>
+                                                {!isUnlimited && (
+                                                    <p className="text-white/80 text-xs font-bold uppercase tracking-[0.075em]">
+                                                        LIMIT {selectedUnderwearCount}/{limitUnderwear}
+                                                    </p>
+                                                )}
                                             </div>
                                         </div>
                                     </div>
@@ -1311,9 +1405,11 @@
                                                 <h3 className="text-[14px] font-bold uppercase tracking-[0.125em] text-black">
                                                     {activePackage === 'underwear' ? subCollectionNameUnderwear : subCollectionNameMain}
                                                 </h3>
-                                                <p className="text-[11px] font-bold uppercase tracking-[0.05em] text-grey-medium mt-1">
-                                                    Selection: {activePackage === 'underwear' ? `${selectedUnderwearCount} / ${limitUnderwear}` : `${selectedMainCount} / ${limitMain}`} Items Selected
-                                                </p>
+                                                {!isUnlimited && (
+                                                    <p className="text-[11px] font-bold uppercase tracking-[0.05em] text-grey-medium mt-1">
+                                                        Selection: {activePackage === 'underwear' ? `${selectedUnderwearCount} / ${limitUnderwear}` : `${selectedMainCount} / ${limitMain}`} Items Selected
+                                                    </p>
+                                                )}
                                             </div>
                                         </div>
                                     ) : (
@@ -1328,9 +1424,11 @@
                                                 <h3 className="text-[14px] font-bold uppercase tracking-[0.125em] text-black">
                                                     {activePackage === 'underwear' ? subCollectionNameUnderwear : subCollectionNameMain}
                                                 </h3>
-                                                <p className="text-[11px] font-bold uppercase tracking-[0.05em] text-grey-medium mt-1">
-                                                    Selection: {activePackage === 'underwear' ? `${selectedUnderwearCount} / ${limitUnderwear}` : `${selectedMainCount} / ${limitMain}`} Items Selected
-                                                </p>
+                                                {!isUnlimited && (
+                                                    <p className="text-[11px] font-bold uppercase tracking-[0.05em] text-grey-medium mt-1">
+                                                        Selection: {activePackage === 'underwear' ? `${selectedUnderwearCount} / ${limitUnderwear}` : `${selectedMainCount} / ${limitMain}`} Items Selected
+                                                    </p>
+                                                )}
                                             </div>
                                         </div>
                                     )}
@@ -1410,19 +1508,21 @@
                         <main className="max-w-2xl mx-auto px-10 pt-16 animate-fade-in">
                             <button onClick={() => handleNav('lookbook')} className="text-[11px] tracking-[0.1em] uppercase mb-24 flex items-center hover:text-gray-400 font-bold cursor-pointer"><Icons.ChevronLeft size={18} className="mr-1" /> Back</button>
                             
-                            <div className="border-b pb-10 mb-20 border-gray-100 space-y-4">
-                                <h2 className="text-xs font-bold uppercase tracking-[0.125em]">Selected List</h2>
-                                <div className="grid grid-cols-2 gap-4 pt-2">
-                                    <div className="bg-gray-50/50 p-4 text-center border">
-                                        <p className="text-[9px] text-grey-light uppercase tracking-wider">{subCollectionNameMain}</p>
-                                        <p className="text-lg font-bold">{selectedMainCount} / {limitMain}</p>
-                                    </div>
-                                    <div className="bg-gray-50/50 p-4 text-center border">
-                                        <p className="text-[9px] text-grey-light uppercase tracking-wider">{subCollectionNameUnderwear}</p>
-                                        <p className="text-lg font-bold">{selectedUnderwearCount} / {limitUnderwear}</p>
+                            {!isUnlimited && (
+                                <div className="border-b pb-10 mb-20 border-gray-100 space-y-4">
+                                    <h2 className="text-xs font-bold uppercase tracking-[0.125em]">Selected List</h2>
+                                    <div className="grid grid-cols-2 gap-4 pt-2">
+                                        <div className="bg-gray-50/50 p-4 text-center border">
+                                            <p className="text-[9px] text-grey-light uppercase tracking-wider">{subCollectionNameMain}</p>
+                                            <p className="text-lg font-bold">{selectedMainCount} / {limitMain}</p>
+                                        </div>
+                                        <div className="bg-gray-50/50 p-4 text-center border">
+                                            <p className="text-[9px] text-grey-light uppercase tracking-wider">{subCollectionNameUnderwear}</p>
+                                            <p className="text-lg font-bold">{selectedUnderwearCount} / {limitUnderwear}</p>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
+                            )}
 
                             <div className="space-y-16 mb-32">
                                 {cart.length === 0 ? (
@@ -1435,7 +1535,7 @@
                                             </div>
                                             <div className="flex-1 space-y-2">
                                                 <span className={`text-[9px] font-bold tracking-widest px-2.5 py-0.5 border rounded-full ${item.subCollection === 'underwear' ? 'bg-purple-50 border-purple-100 text-purple-600' : 'bg-blue-50 border-blue-100 text-blue-600'}`}>
-                                                    {item.subCollection === 'underwear' ? subCollectionNameUnderwear : subCollectionNameMain}
+                                                    {item.subCollection === 'underwear' ? 'underwear' : 'main'}
                                                 </span>
                                                 <h4 className="text-[12px] font-normal uppercase pt-1">{item.productName}</h4>
                                                 <p className="text-[10px] text-grey-medium tracking-[0.1em] uppercase">Size: <span className="text-black ml-2 font-bold">{item.size}</span></p>
