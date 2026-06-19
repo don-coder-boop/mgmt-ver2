@@ -33,7 +33,7 @@
     </script>
 
     <!-- Google Fonts: Inter -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght=300;400;700&display=swap" rel="stylesheet">
     
     <style>
         body {
@@ -286,14 +286,15 @@
 
         const downloadCSV = (filename, data) => {
             if (data.length === 0) return;
-            const headers = ["instagram ID", "이름", "전화번호", "받는분기타연락처", "받는분우편번호", "주소", "제품명", "사이즈", "수량", "배송메세지1"];
+            const headers = ["instagram ID", "이름", "전화번호", "받는분기타연락처", "받는분우편번호", "주소", "제품명", "사이즈", "수량", "배송메세지1", "소속컬렉션"];
             const csvRows = [headers.join(',')];
             data.forEach(item => {
                 const escape = (val) => `"${String(val || "").replace(/"/g, '""')}"`;
                 csvRows.push([
                     escape(item.instagramId), escape(item.name), escape(item.phone),
                     escape(""), escape(""), escape(item.address),
-                    escape(item.productName), escape(item.size), escape(1), escape(item.message)
+                    escape(item.productName), escape(item.size), escape(1), escape(item.message),
+                    escape(item.subCollection || "main")
                 ].join(','));
             });
             const blob = new Blob(["\uFEFF" + csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
@@ -334,6 +335,10 @@
             const [sortConfig, setSortConfig] = useState({ key: 'submitDate', direction: 'desc' });
             const [isUploading, setIsUploading] = useState(false);
 
+            // Sub-collection names with fallback defaults
+            const subCollectionNameMain = collection.subCollectionNameMain || 'Nuuanu Main Collection';
+            const subCollectionNameUnderwear = collection.subCollectionNameUnderwear || 'Nuuanu Underwear Collection';
+
             const handleUpdate = (u, skipNotify = false) => { 
                 onUpdate({ ...collection, ...u }); 
                 if (!skipNotify) notify('Cloud Sync Saved', 'success'); 
@@ -368,11 +373,12 @@
                         const cols = rows[i];
                         if (!cols || cols.length < 1) continue;
                         const code = cols[0]?.trim();
-                        const limit = cols[1];
+                        const limitMain = parseInt(cols[1]) || 3;
+                        const limitUnderwear = parseInt(cols[2]) || 2;
                         if (code) {
                             const combinedTemp = [...currentCodes, ...newCodes];
                             if (isCodeGloballyUnique(code, collection.id, [...combinedTemp, { code }])) {
-                                newCodes.push({ code: code, limit: parseInt(limit) || 2 });
+                                newCodes.push({ code: code, limitMain: limitMain, limitUnderwear: limitUnderwear });
                             }
                         }
                     }
@@ -399,11 +405,22 @@
                     for (let i = 1; i < rows.length; i++) {
                         const cols = rows[i];
                         if (!cols || cols.length < 4) continue;
-                        const [name, price, optionStr, summary] = cols;
+                        const [name, price, optionStr, summary, subCol] = cols;
                         let options = ['OS'];
                         const match = (optionStr || '').match(/size\{([^}]+)\}/i);
                         if (match) options = match[1].split('|');
-                        newProducts.push({ id: generateId(), name: name || 'New Item', price: price || '0', options: options, description: summary || '', images: [] });
+                        
+                        const subVal = (subCol || 'main').toLowerCase().trim() === 'underwear' ? 'underwear' : 'main';
+
+                        newProducts.push({ 
+                            id: generateId(), 
+                            name: name || 'New Item', 
+                            price: price || '0', 
+                            options: options, 
+                            description: summary || '', 
+                            images: [],
+                            subCollection: subVal
+                        });
                     }
                     if (newProducts.length > 0) {
                         handleUpdate({ products: [...collection.products, ...newProducts] });
@@ -489,7 +506,7 @@
                 if (window.confirm("정말로 이 컬렉션을 삭제하시겠습니까? 삭제된 데이터는 복구할 수 없습니다.")) {
                     const inputCode = window.prompt("보안을 위해 어드민 코드를 입력해 주세요.");
                     if (inputCode === adminAccessCode) {
-                        onDelete(); // Prop which triggers App.tsx deleteCollection
+                        onDelete();
                     } else if (inputCode !== null) {
                         notify('어드민 코드가 틀렸습니다.', 'error');
                     }
@@ -585,20 +602,36 @@
                                         </div>
                                     </div>
                                 </section>
+
+                                <section className="space-y-10">
+                                    <h3 className="text-[15px] font-bold uppercase tracking-[0.1em] border-b pb-6 font-bold text-black">Sub-Collection Names Setting</h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+                                        <div className="space-y-4">
+                                            <label className="text-[12px] text-grey-medium uppercase font-bold tracking-normal">Main Category Label (or Brand Category)</label>
+                                            <input type="text" className="w-full border-b-2 py-3 focus:border-black outline-none text-[16px] font-bold" value={subCollectionNameMain} onChange={e => handleUpdate({ subCollectionNameMain: e.target.value }, true)} />
+                                        </div>
+                                        <div className="space-y-4">
+                                            <label className="text-[12px] text-grey-medium uppercase font-bold tracking-normal">Underwear Category Label (or Alternative)</label>
+                                            <input type="text" className="w-full border-b-2 py-3 focus:border-black outline-none text-[16px] font-bold" value={subCollectionNameUnderwear} onChange={e => handleUpdate({ subCollectionNameUnderwear: e.target.value }, true)} />
+                                        </div>
+                                    </div>
+                                </section>
+
                                 <section className="space-y-10">
                                     <div className="flex justify-between items-center border-b pb-6">
                                         <h3 className="text-[15px] font-bold uppercase tracking-[0.1em]">Influencer Access Codes</h3>
                                         <div className="flex space-x-4">
                                             <label className="text-[14px] uppercase font-bold text-black border-2 border-black px-6 py-2 flex items-center cursor-pointer hover:bg-black hover:text-white transition-colors">
-                                                <Icons.Spreadsheet size={18} className="mr-2"/> Bulk Upload
+                                                <Icons.Spreadsheet size={18} className="mr-2"/> Bulk Upload (.csv)
                                                 <input type="file" accept=".csv" className="hidden" onChange={handleCodeBulkUpload} />
                                             </label>
                                             <button onClick={() => {
-                                                const newCode = { code: generateId().substring(0,6), limit: 2 };
+                                                const newCode = { code: generateId().substring(0,6), limitMain: 3, limitUnderwear: 2 };
                                                 handleUpdate({ accessCodesV2: [...accessCodes, newCode] });
                                             }} className="text-[14px] uppercase font-bold text-white bg-black px-6 py-2 flex items-center"><Icons.Plus size={18} className="mr-2"/> Add Code</button>
                                         </div>
                                     </div>
+                                    <p className="text-xs text-gray-400 uppercase tracking-wider">* CSV Format: code, limitMain, limitUnderwear (e.g. "GIRLSOUT12,3,2")</p>
                                     <div className="grid gap-8">
                                         {accessCodes.map((ac, idx) => {
                                             const isUnique = isCodeGloballyUnique(ac.code, collection.id, accessCodes);
@@ -607,7 +640,7 @@
                                                     <div className="flex-1 space-y-4 w-full">
                                                         <label className="text-[12px] text-grey-light uppercase tracking-normal font-bold">Code</label>
                                                         <div className="relative">
-                                                            <input type="text" className={`w-full bg-white border-b-2 py-3 px-3 outline-none text-[16px] uppercase transition-colors ${!isUnique ? 'border-red-500 focus:border-red-600' : 'focus:border-black'}`} value={ac.code} onChange={e => {
+                                                            <input type="text" className={`w-full bg-white border-b-2 py-3 px-3 outline-none text-[16px] uppercase font-bold transition-colors ${!isUnique ? 'border-red-500 focus:border-red-600' : 'focus:border-black'}`} value={ac.code} onChange={e => {
                                                                 const codes = [...accessCodes];
                                                                 codes[idx].code = e.target.value.trim();
                                                                 handleUpdate({ accessCodesV2: codes }, true);
@@ -615,15 +648,23 @@
                                                             {!isUnique && <div className="mt-2 text-[10px] text-red-600 font-bold uppercase tracking-tight flex items-center"><Icons.Alert size={14} className="mr-1"/> 이미 사용 중인 코드입니다.</div>}
                                                         </div>
                                                     </div>
-                                                    <div className="w-full sm:w-40 space-y-4">
-                                                        <label className="text-[12px] text-grey-light uppercase tracking-normal font-bold">Limit</label>
-                                                        <input type="number" className="w-full bg-white border-b-2 py-3 px-3 focus:border-black outline-none text-[16px]" value={ac.limit} onChange={e => {
+                                                    <div className="w-full sm:w-48 space-y-4">
+                                                        <label className="text-[12px] text-grey-light uppercase tracking-normal font-bold">Main Limit</label>
+                                                        <input type="number" className="w-full bg-white border-b-2 py-3 px-3 focus:border-black outline-none text-[16px] font-medium" value={ac.limitMain !== undefined ? ac.limitMain : (ac.limit || 3)} onChange={e => {
                                                             const codes = [...accessCodes];
-                                                            codes[idx].limit = parseInt(e.target.value) || 1;
+                                                            codes[idx].limitMain = parseInt(e.target.value) || 0;
                                                             handleUpdate({ accessCodesV2: codes }, true);
                                                         }} />
                                                     </div>
-                                                    <button onClick={() => handleUpdate({ accessCodesV2: accessCodes.filter((_, i) => i !== idx) })} className="p-3 bg-black text-white hover:bg-black/80 transition-colors rounded"><Icons.Trash size={20}/></button>
+                                                    <div className="w-full sm:w-48 space-y-4">
+                                                        <label className="text-[12px] text-grey-light uppercase tracking-normal font-bold">Underwear Limit</label>
+                                                        <input type="number" className="w-full bg-white border-b-2 py-3 px-3 focus:border-black outline-none text-[16px] font-medium" value={ac.limitUnderwear !== undefined ? ac.limitUnderwear : 2} onChange={e => {
+                                                            const codes = [...accessCodes];
+                                                            codes[idx].limitUnderwear = parseInt(e.target.value) || 0;
+                                                            handleUpdate({ accessCodesV2: codes }, true);
+                                                        }} />
+                                                    </div>
+                                                    <button onClick={() => handleUpdate({ accessCodesV2: accessCodes.filter((_, i) => i !== idx) })} className="p-3 bg-black text-white hover:bg-black/80 transition-colors rounded self-end"><Icons.Trash size={20}/></button>
                                                 </div>
                                             );
                                         })}
@@ -665,10 +706,10 @@
                                     <h3 className="text-[15px] font-bold uppercase tracking-[0.1em]">Catalog</h3>
                                     <div className="flex space-x-6">
                                         <label className="bg-white border-2 border-black text-black px-10 py-4 text-[14px] uppercase font-bold cursor-pointer hover:bg-black hover:text-white transition-all flex items-center">
-                                            <Icons.Spreadsheet size={20} className="mr-3" /> Bulk Upload
+                                            <Icons.Spreadsheet size={20} className="mr-3" /> Bulk Upload (.csv)
                                             <input type="file" accept=".csv" className="hidden" onChange={handleCSVUpload} />
                                         </label>
-                                        <button onClick={() => handleUpdate({ products: [...(collection.products || []), { id: generateId(), name: 'New Item', price: '0', options: ['OS'], description: '', images: [] }] })} className="bg-black text-white px-12 py-4 text-[14px] uppercase font-bold flex items-center"><Icons.Plus size={20} className="mr-3" /> Add Product</button>
+                                        <button onClick={() => handleUpdate({ products: [...(collection.products || []), { id: generateId(), name: 'New Item', price: '0', options: ['OS'], description: '', images: [], subCollection: 'main' }] })} className="bg-black text-white px-12 py-4 text-[14px] uppercase font-bold flex items-center"><Icons.Plus size={20} className="mr-3" /> Add Product</button>
                                     </div>
                                 </div>
                                 <div className="grid gap-16">
@@ -682,6 +723,19 @@
                                                 <div className="space-y-2">
                                                     <label className="text-[12px] uppercase font-bold text-grey-light">Price</label>
                                                     <input className="w-full border-b-2 py-3 focus:border-black outline-none text-[16px]" value={p.price} onChange={e => handleUpdate({ products: collection.products.map(x => x.id === p.id ? {...x, price: e.target.value} : x) }, true)} />
+                                                </div>
+                                                <div className="col-span-2 space-y-2">
+                                                    <label className="text-[12px] uppercase font-bold text-grey-light">Sub-Collection Packaging</label>
+                                                    <div className="flex space-x-6 mt-2">
+                                                        <label className="flex items-center space-x-2 text-[14px] font-bold uppercase cursor-pointer">
+                                                            <input type="radio" name={`subCol-${p.id}`} checked={(p.subCollection || 'main') === 'main'} onChange={() => handleUpdate({ products: collection.products.map(x => x.id === p.id ? {...x, subCollection: 'main'} : x) })} className="accent-black w-4 h-4" />
+                                                            <span>{subCollectionNameMain}</span>
+                                                        </label>
+                                                        <label className="flex items-center space-x-2 text-[14px] font-bold uppercase cursor-pointer">
+                                                            <input type="radio" name={`subCol-${p.id}`} checked={(p.subCollection || 'main') === 'underwear'} onChange={() => handleUpdate({ products: collection.products.map(x => x.id === p.id ? {...x, subCollection: 'underwear'} : x) })} className="accent-black w-4 h-4" />
+                                                            <span>{subCollectionNameUnderwear}</span>
+                                                        </label>
+                                                    </div>
                                                 </div>
                                                 <div className="col-span-2 space-y-2">
                                                     <label className="text-[12px] uppercase font-bold text-grey-light">Sizes</label>
@@ -748,6 +802,7 @@
                                                         { key: 'address', label: 'Address' },
                                                         { key: 'productName', label: 'Product' },
                                                         { key: 'size', label: 'Size' },
+                                                        { key: 'subCollection', label: 'Category' },
                                                         { key: 'adminMemo', label: 'Memo' }
                                                     ].map(col => (
                                                         <th key={col.key} className={`p-6 cursor-pointer hover:text-black group select-none whitespace-nowrap`} onClick={() => handleSort(col.key)}>
@@ -781,6 +836,11 @@
                                                         </td>
                                                         <td className="p-6">
                                                             <input className="w-full bg-transparent border-b-2 border-transparent focus:border-black outline-none uppercase" value={e.size} onChange={v => handleUpdate({ shippingEntries: shippingEntries.map(x => x.id === e.id ? {...x, size: v.target.value} : x) }, true)} />
+                                                        </td>
+                                                        <td className="p-6 font-bold uppercase text-[12px]">
+                                                            <span className={`px-3 py-1 rounded-full ${e.subCollection === 'underwear' ? 'bg-purple-50 text-purple-600' : 'bg-blue-50 text-blue-600'}`}>
+                                                                {e.subCollection === 'underwear' ? subCollectionNameUnderwear : subCollectionNameMain}
+                                                            </span>
                                                         </td>
                                                         <td className="p-6">
                                                             <textarea className="w-full h-12 text-[14px] border-2 bg-transparent p-2 focus:bg-white focus:h-24 transition-all outline-none" placeholder="..." value={e.adminMemo || ''} onChange={v => handleUpdate({ shippingEntries: shippingEntries.map(x => x.id === e.id ? {...x, adminMemo: v.target.value} : x) }, true)} />
@@ -862,15 +922,33 @@
             const [activeImageIndex, setActiveImageIndex] = useState(0);
             const [formData, setFormData] = useState({ instagramId: '', name: '', phone: '', address: '', message: '', extra: '', agreed: false });
             
+            // Sub collection page state (null means card chooser is shown)
+            const [activePackage, setActivePackage] = useState(null);
+
             const [touchStart, setTouchStart] = useState(null);
             const [touchEnd, setTouchEnd] = useState(null);
             const minSwipeDistance = 50;
 
-            const currentLimit = useMemo(() => {
+            const subCollectionNameMain = collection.subCollectionNameMain || 'Nuuanu Main Collection';
+            const subCollectionNameUnderwear = collection.subCollectionNameUnderwear || 'Nuuanu Underwear Collection';
+
+            // Extract limit configuration from access code
+            const matchedAccessCodeObj = useMemo(() => {
                 const acs = (collection && collection.accessCodesV2) || [];
-                const found = acs.find(a => a.code && a.code.toLowerCase().trim() === loginCode.toLowerCase().trim());
-                return found ? found.limit : 1;
+                return acs.find(a => a.code && a.code.toLowerCase().trim() === loginCode.toLowerCase().trim());
             }, [collection, loginCode]);
+
+            const limitMain = useMemo(() => {
+                if (!matchedAccessCodeObj) return 3;
+                if (matchedAccessCodeObj.limitMain !== undefined) return matchedAccessCodeObj.limitMain;
+                return matchedAccessCodeObj.limit || 3;
+            }, [matchedAccessCodeObj]);
+
+            const limitUnderwear = useMemo(() => {
+                if (!matchedAccessCodeObj) return 2;
+                if (matchedAccessCodeObj.limitUnderwear !== undefined) return matchedAccessCodeObj.limitUnderwear;
+                return 2;
+            }, [matchedAccessCodeObj]);
 
             useLayoutEffect(() => { 
                 if (view === 'lookbook' && scrollPosRef.current > 0) setTimeout(() => window.scrollTo({ top: scrollPosRef.current, behavior: 'instant' }), 0); 
@@ -908,10 +986,38 @@
                 if (isRightSwipe) prev();
             };
 
+            // Calculate cart quantities based on package type
+            const selectedMainCount = useMemo(() => {
+                return cart.filter(item => (item.subCollection || 'main') === 'main').length;
+            }, [cart]);
+
+            const selectedUnderwearCount = useMemo(() => {
+                return cart.filter(item => item.subCollection === 'underwear').length;
+            }, [cart]);
+
             const addToCart = () => { 
                 if(!selectedProd || !selectedSize) { alert('Select size preference'); return; } 
-                if(cart.length >= currentLimit) { alert(`Selection limit reached: ${currentLimit} items.`); return; } 
-                setCart([...cart, { id: generateId(), productName: selectedProd.name, size: selectedSize, image: (selectedProd.images && selectedProd.images[0]) || 'https://picsum.photos/400/600' }]); 
+                
+                const prodSubCol = selectedProd.subCollection || 'main';
+                if (prodSubCol === 'underwear') {
+                    if (selectedUnderwearCount >= limitUnderwear) {
+                        alert(`${subCollectionNameUnderwear}은(는) 최대 ${limitUnderwear}개까지만 선택할 수 있습니다.`);
+                        return;
+                    }
+                } else {
+                    if (selectedMainCount >= limitMain) {
+                        alert(`${subCollectionNameMain}은(는) 최대 ${limitMain}개까지만 선택할 수 있습니다.`);
+                        return;
+                    }
+                }
+
+                setCart([...cart, { 
+                    id: generateId(), 
+                    productName: selectedProd.name, 
+                    size: selectedSize, 
+                    image: (selectedProd.images && selectedProd.images[0]) || 'https://picsum.photos/400/600',
+                    subCollection: prodSubCol
+                }]); 
                 notify('Added to selection', 'success'); 
                 handleNav('lookbook'); 
             };
@@ -927,6 +1033,7 @@
                     size: item.size, 
                     quantity: 1, 
                     usedCode: loginCode, 
+                    subCollection: item.subCollection || 'main',
                     adminMemo: '',
                     isManual: false 
                 }))); 
@@ -942,10 +1049,16 @@
                 </div>
             );
 
+            // Filter products matching current subcollection package
+            const filteredProducts = (collection.products || []).filter(p => {
+                const sub = p.subCollection || 'main';
+                return sub === activePackage;
+            });
+
             return (
                 <div className="min-h-screen bg-white pb-40 animate-fade-in">
                     <header className="px-10 py-10 sticky top-0 bg-white/95 backdrop-blur-md z-40 flex justify-between items-center border-b border-gray-50">
-                        <h1 className="text-2xl font-light tracking-[0.125em] uppercase cursor-pointer" onClick={() => handleNav('lookbook')}>nuuanu</h1>
+                        <h1 className="text-2xl font-light tracking-[0.125em] uppercase cursor-pointer" onClick={() => { setActivePackage(null); handleNav('lookbook'); }}>nuuanu</h1>
                         <div className="flex items-center space-x-4">
                             <button onClick={() => handleNav('cart')} className="relative flex items-center transition-transform active:scale-90 p-1 cursor-pointer">
                                 <Icons.ShoppingBag size={28} />
@@ -959,7 +1072,7 @@
                     {view === 'lookbook' && (
                         <main className="animate-fade-in">
                             <section 
-                                className="relative px-0 py-10 overflow-hidden"
+                                className="relative px-0 py-10 overflow-hidden text-center"
                                 onTouchStart={handleTouchStart}
                                 onTouchMove={handleTouchMove}
                                 onTouchEnd={handleTouchEnd}
@@ -996,29 +1109,95 @@
                                     )}
                                 </div>
                             </section>
-                            <section className="max-w-2xl mx-auto text-center mt-6 mb-32 px-10 space-y-6">
+                            <section className="max-w-2xl mx-auto text-center mt-6 mb-20 px-10 space-y-6">
                                 <h2 className="text-2xl font-light tracking-[0.125em] uppercase border-b border-gray-100 pb-4 inline-block">{collection.descriptionTitle}</h2>
                                 <div className="text-sm font-light leading-relaxed tracking-[0.05em] text-grey-dark" dangerouslySetInnerHTML={{ __html: (collection.descriptionBody || '').replace(/\n/g, '<br/>') }} />
                             </section>
-                            <section className="max-w-6xl mx-auto px-10">
-                                <div className="flex justify-between items-end border-b border-gray-50 pb-5 mb-10">
-                                    <div><h3 className="text-[12px] font-bold uppercase tracking-[0.125em]">Selection</h3></div>
-                                    <p className="text-[10px] text-grey-medium uppercase tracking-[0.1em] font-bold">Limit: {cart.length} / {currentLimit}</p>
-                                </div>
-                                <div className="product-grid">
-                                    {(collection.products || []).map(p => (
-                                        <div key={p.id} className="group cursor-pointer" onClick={() => { setSelectedProd(p); setActiveImageIndex(0); setSelectedSize(''); handleNav('product_detail'); }}>
-                                            <div className="mb-2 overflow-hidden relative bg-transparent">
-                                                <img src={(p.images && p.images[0]) || 'https://picsum.photos/seed/nuuanu/400/600'} className="w-full aspect-[3/4] object-cover group-hover:scale-110 transition-transform duration-[2000ms]" />
+
+                            {/* Gateway Page: ActivePackage is null */}
+                            {activePackage === null ? (
+                                <section className="max-w-4xl mx-auto px-10 space-y-12 animate-fade-in">
+                                    <div className="text-center">
+                                        <h3 className="text-lg font-light tracking-[0.15em] uppercase border-b pb-4 mb-4">Select Seeding Package</h3>
+                                        <p className="text-xs text-grey-medium uppercase">각 패키지별 한도가 독립 적용되며, 최종 결제 단계에서 합산되어 주문됩니다.</p>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+                                        {/* Card 1: Main Collection */}
+                                        <div 
+                                            onClick={() => { setActivePackage('main'); window.scrollTo(0,400); }} 
+                                            className="border-2 border-gray-100 hover:border-black p-12 text-center space-y-6 transition-all shadow-sm hover:shadow-2xl cursor-pointer flex flex-col justify-between aspect-[4/3] bg-white group"
+                                        >
+                                            <div className="space-y-4 pt-4">
+                                                <Icons.Package size={36} className="mx-auto group-hover:scale-110 transition-transform" />
+                                                <h4 className="text-md font-bold uppercase tracking-wider">{subCollectionNameMain}</h4>
+                                                <p className="text-xs text-grey-light uppercase">의류, 가방 및 ACC 주력 시딩 라인</p>
                                             </div>
-                                            <div className="space-y-1">
-                                                <h4 className="text-[12px] font-normal tracking-normal uppercase">{p.name}</h4>
-                                                <p className="text-[10px] text-grey-medium uppercase">KRW {p.price}</p>
+                                            <div className="border-t pt-4">
+                                                <span className="text-xs font-bold uppercase py-2 px-6 bg-black text-white">
+                                                    Limit: {selectedMainCount} / {limitMain} Selected
+                                                </span>
                                             </div>
                                         </div>
-                                    ))}
-                                </div>
-                            </section>
+
+                                        {/* Card 2: Underwear Collection */}
+                                        <div 
+                                            onClick={() => { setActivePackage('underwear'); window.scrollTo(0,400); }} 
+                                            className="border-2 border-gray-100 hover:border-black p-12 text-center space-y-6 transition-all shadow-sm hover:shadow-2xl cursor-pointer flex flex-col justify-between aspect-[4/3] bg-white group"
+                                        >
+                                            <div className="space-y-4 pt-4">
+                                                <Icons.ShoppingBag size={36} className="mx-auto group-hover:scale-110 transition-transform" />
+                                                <h4 className="text-md font-bold uppercase tracking-wider">{subCollectionNameUnderwear}</h4>
+                                                <p className="text-xs text-grey-light uppercase">라이프웨어 및 프리미엄 속옷 시딩 라인</p>
+                                            </div>
+                                            <div className="border-t pt-4">
+                                                <span className="text-xs font-bold uppercase py-2 px-6 bg-black text-white">
+                                                    Limit: {selectedUnderwearCount} / {limitUnderwear} Selected
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </section>
+                            ) : (
+                                /* Products List screen within subcollection packaging */
+                                <section className="max-w-6xl mx-auto px-10 animate-fade-in">
+                                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end border-b border-gray-100 pb-6 mb-10 gap-4">
+                                        <button 
+                                            onClick={() => { setActivePackage(null); }} 
+                                            className="text-[11px] tracking-[0.1em] uppercase flex items-center hover:text-gray-400 font-bold cursor-pointer border-b border-black pb-1"
+                                        >
+                                            <Icons.ChevronLeft size={16} className="mr-1" /> Choose Other Package
+                                        </button>
+                                        <div className="text-right">
+                                            <h3 className="text-[14px] font-bold uppercase tracking-[0.125em] text-black">
+                                                {activePackage === 'underwear' ? subCollectionNameUnderwear : subCollectionNameMain}
+                                            </h3>
+                                            <p className="text-[11px] font-bold uppercase tracking-[0.05em] text-grey-medium mt-1">
+                                                Selection: {activePackage === 'underwear' ? `${selectedUnderwearCount} / ${limitUnderwear}` : `${selectedMainCount} / ${limitMain}`} Items Selected
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {filteredProducts.length === 0 ? (
+                                        <div className="py-24 text-center text-grey-medium uppercase tracking-[0.1em] text-xs">
+                                            이 컬렉션에 등록된 제품이 없습니다.
+                                        </div>
+                                    ) : (
+                                        <div className="product-grid">
+                                            {filteredProducts.map(p => (
+                                                <div key={p.id} className="group cursor-pointer" onClick={() => { setSelectedProd(p); setActiveImageIndex(0); setSelectedSize(''); handleNav('product_detail'); }}>
+                                                    <div className="mb-2 overflow-hidden relative bg-transparent">
+                                                        <img src={(p.images && p.images[0]) || 'https://picsum.photos/seed/nuuanu/400/600'} className="w-full aspect-[3/4] object-cover group-hover:scale-110 transition-transform duration-[2000ms]" />
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <h4 className="text-[12px] font-normal tracking-normal uppercase">{p.name}</h4>
+                                                        <p className="text-[10px] text-grey-medium uppercase">KRW {p.price}</p>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </section>
+                            )}
                         </main>
                     )}
                     {view === 'product_detail' && selectedProd && (
@@ -1041,7 +1220,10 @@
                                 </div>
                                 <div className="space-y-20">
                                     <div className="border-b pb-12 border-gray-100">
-                                        <h2 className="text-xl font-light tracking-tight uppercase mb-4">{selectedProd.name}</h2>
+                                        <span className="text-[10px] tracking-widest font-bold uppercase bg-gray-150 py-1 px-3 border rounded-full text-grey-medium">
+                                            {(selectedProd.subCollection === 'underwear') ? subCollectionNameUnderwear : subCollectionNameMain}
+                                        </span>
+                                        <h2 className="text-xl font-light tracking-tight uppercase mb-4 mt-4">{selectedProd.name}</h2>
                                         <p className="text-grey-medium tracking-[0.125em] text-sm uppercase font-light mb-8">KRW {selectedProd.price}</p>
                                         <div className="text-sm leading-relaxed text-grey-dark font-light" dangerouslySetInnerHTML={{ __html: (selectedProd.description || '').replace(/\n/g, '<br/>') }} />
                                     </div>
@@ -1069,23 +1251,41 @@
                     {view === 'cart' && (
                         <main className="max-w-2xl mx-auto px-10 pt-16 animate-fade-in">
                             <button onClick={() => handleNav('lookbook')} className="text-[11px] tracking-[0.1em] uppercase mb-24 flex items-center hover:text-gray-400 font-bold cursor-pointer"><Icons.ChevronLeft size={18} className="mr-1" /> Back</button>
-                            <div className="flex justify-between items-end border-b pb-10 mb-20 border-gray-100">
+                            
+                            <div className="border-b pb-10 mb-20 border-gray-100 space-y-4">
                                 <h2 className="text-xs font-bold uppercase tracking-[0.125em]">Selected List</h2>
-                                <p className="text-[10px] text-grey-medium font-bold uppercase tracking-[0.05em]">{cart.length} / {currentLimit}</p>
-                            </div>
-                            <div className="space-y-16 mb-32">
-                                {cart.map((item, i) => (
-                                    <div key={i} className="flex space-x-10 items-center group">
-                                        <div className="w-28 bg-transparent shadow-2xl overflow-hidden relative">
-                                            <img src={item.image} className="w-full h-auto block" />
-                                        </div>
-                                        <div className="flex-1">
-                                            <h4 className="text-[12px] font-normal uppercase mb-3">{item.productName}</h4>
-                                            <p className="text-[10px] text-grey-medium tracking-[0.1em] uppercase">Size: <span className="text-black ml-2 font-bold">{item.size}</span></p>
-                                        </div>
-                                        <button onClick={() => setCart(cart.filter((_, idx) => idx !== i))} className="text-gray-300 hover:text-red-500 transition-all p-4 cursor-pointer"><Icons.X size={24} /></button>
+                                <div className="grid grid-cols-2 gap-4 pt-2">
+                                    <div className="bg-gray-50/50 p-4 text-center border">
+                                        <p className="text-[9px] text-grey-light uppercase tracking-wider">{subCollectionNameMain}</p>
+                                        <p className="text-lg font-bold">{selectedMainCount} / {limitMain}</p>
                                     </div>
-                                ))}
+                                    <div className="bg-gray-50/50 p-4 text-center border">
+                                        <p className="text-[9px] text-grey-light uppercase tracking-wider">{subCollectionNameUnderwear}</p>
+                                        <p className="text-lg font-bold">{selectedUnderwearCount} / {limitUnderwear}</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="space-y-16 mb-32">
+                                {cart.length === 0 ? (
+                                    <div className="py-12 text-center text-xs uppercase text-grey-light">선택한 아이템이 없습니다.</div>
+                                ) : (
+                                    cart.map((item, i) => (
+                                        <div key={i} className="flex space-x-10 items-center group">
+                                            <div className="w-28 bg-transparent shadow-2xl overflow-hidden relative">
+                                                <img src={item.image} className="w-full h-auto block" />
+                                            </div>
+                                            <div className="flex-1 space-y-2">
+                                                <span className={`text-[9px] font-bold tracking-widest px-2.5 py-0.5 border rounded-full ${item.subCollection === 'underwear' ? 'bg-purple-50 border-purple-100 text-purple-600' : 'bg-blue-50 border-blue-100 text-blue-600'}`}>
+                                                    {item.subCollection === 'underwear' ? subCollectionNameUnderwear : subCollectionNameMain}
+                                                </span>
+                                                <h4 className="text-[12px] font-normal uppercase pt-1">{item.productName}</h4>
+                                                <p className="text-[10px] text-grey-medium tracking-[0.1em] uppercase">Size: <span className="text-black ml-2 font-bold">{item.size}</span></p>
+                                            </div>
+                                            <button onClick={() => setCart(cart.filter((_, idx) => idx !== i))} className="text-gray-300 hover:text-red-500 transition-all p-4 cursor-pointer"><Icons.X size={24} /></button>
+                                        </div>
+                                    ))
+                                )}
                             </div>
                             <div className="bg-transparent p-12 space-y-16 shadow-2xl rounded-sm border border-gray-100">
                                 <h3 className="text-[11px] font-bold uppercase tracking-[0.125em] border-b pb-8 border-gray-200">Shipping Info</h3>
@@ -1188,12 +1388,14 @@
                 const newColl = {
                     id: generateId(),
                     name: name.trim(),
-                    accessCodesV2: [{ code: generateId().substring(0, 6), limit: 2 }],
+                    accessCodesV2: [{ code: generateId().substring(0, 6), limitMain: 3, limitUnderwear: 2 }],
                     lookbookImages: [],
                     descriptionTitle: 'New Story',
                     descriptionBody: 'Collection inspiration...',
                     products: [],
-                    shippingEntries: []
+                    shippingEntries: [],
+                    subCollectionNameMain: 'Nuuanu Main Collection',
+                    subCollectionNameUnderwear: 'Nuuanu Underwear Collection'
                 };
                 try {
                     await addDoc(collection(db, 'collections'), newColl);
