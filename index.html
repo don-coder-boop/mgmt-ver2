@@ -272,6 +272,17 @@
 
         const generateId = () => Math.random().toString(36).substr(2, 9);
 
+        const cleanInstaId = (id) => {
+            if (!id) return '';
+            return id.replace(/@/g, '').trim();
+        };
+
+        const getStatusColorClass = (status) => {
+            if (status === '배송완료') return 'text-green-600 border-green-100 bg-green-50';
+            if (status === '보류') return 'text-red-600 border-red-100 bg-red-50';
+            return 'text-orange-600 border-orange-100 bg-orange-50';
+        };
+
         const parseCSV = (text) => {
             const rows = [];
             let currentRow = [];
@@ -630,7 +641,7 @@
                                 {id:'settings', label:'Settings', icon:Icons.Settings}, 
                                 {id:'products', label:'Products', icon:Icons.Package}, 
                                 {id:'shipping', label:'Shipping', icon:Icons.Truck}, 
-                                {id:'report', label:'Report', icon:Icons.Chart}
+                                {id:'report', label:'Dashboard', icon:Icons.Chart}
                             ].map(tab => (
                                 <button key={tab.id} onClick={() => setSubView(tab.id)} className={`flex items-center space-x-3 text-[15px] uppercase tracking-[0.075em] py-2 ${activeSubView === tab.id ? 'text-black font-bold border-b-2 border-black' : 'text-grey-medium hover:text-black'}`}>
                                     <tab.icon size={20} /> <span className="hidden md:inline">{tab.label}</span>
@@ -1034,6 +1045,7 @@
                                                 <span className="text-[13px] uppercase font-bold text-grey-medium px-2">{selectedRows.size} selected</span>
                                                 <button onClick={() => handleBulkStatusChange('배송완료')} className="text-[12px] font-bold uppercase bg-black text-white px-4 py-2 hover:bg-black/80 transition-colors">Set Delivered</button>
                                                 <button onClick={() => handleBulkStatusChange('준비중')} className="text-[12px] font-bold uppercase border border-black px-4 py-2 hover:bg-black hover:text-white transition-colors">Set Preparing</button>
+                                                <button onClick={() => handleBulkStatusChange('보류')} className="text-[12px] font-bold uppercase border border-red-500 text-red-500 px-4 py-2 hover:bg-red-500 hover:text-white transition-colors">Set On Hold</button>
                                                 {showArchived ? (
                                                     <button onClick={() => handleBulkArchive(false)} className="text-[12px] font-bold uppercase bg-blue-600 text-white px-4 py-2 hover:bg-blue-700 transition-colors">Restore Selected</button>
                                                 ) : (
@@ -1084,13 +1096,23 @@
                                                             <input type="checkbox" className="w-4 h-4" checked={selectedRows.has(e.id)} onChange={() => toggleRow(e.id)} />
                                                         </td>
                                                         <td className="p-6">
-                                                            <select className={`text-[12px] px-3 py-2 border-2 font-bold uppercase bg-white ${e.status === '배송완료' ? 'text-green-600 border-green-100 bg-green-50' : 'text-orange-600 border-orange-100 bg-orange-50'}`} value={e.status} onChange={val => handleUpdate({ shippingEntries: shippingEntries.map(x => x.id === e.id ? {...x, status: val.target.value} : x) })}>
+                                                            <select className={`text-[12px] px-3 py-2 border-2 font-bold uppercase bg-white ${getStatusColorClass(e.status)}`} value={e.status} onChange={val => handleUpdate({ shippingEntries: shippingEntries.map(x => x.id === e.id ? {...x, status: val.target.value} : x) })}>
                                                                 <option value="준비중">준비중</option>
                                                                 <option value="배송완료">배송완료</option>
+                                                                <option value="보류">보류</option>
                                                             </select>
                                                         </td>
                                                         <td className="p-6 text-grey-medium font-mono text-[14px]">{e.submitDate}</td>
-                                                        <td className="p-6 font-bold uppercase">@{e.instagramId}</td>
+                                                        <td className="p-6 font-bold uppercase">
+                                                            <a 
+                                                                href={`https://www.instagram.com/${cleanInstaId(e.instagramId)}`} 
+                                                                target="_blank" 
+                                                                rel="noopener noreferrer" 
+                                                                className="hover:underline text-black"
+                                                            >
+                                                                {cleanInstaId(e.instagramId)}
+                                                            </a>
+                                                        </td>
                                                         <td className="p-6">{e.name}</td>
                                                         <td className="p-6 truncate-custom">{truncateText(e.phone, 13)}</td>
                                                         <td className="p-6 truncate-custom" title={e.address}>{truncateText(e.address, 20)}</td>
@@ -1142,121 +1164,7 @@
 
                             return (
                                 <div className="max-w-6xl mx-auto space-y-20 animate-fade-in">
-                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-                                        <div className="bg-nuuanu-blue-soft p-12 border-2 border-nuuanu-blue-light shadow-sm text-center space-y-4 rounded-xl">
-                                            <p className="text-[11px] text-nuuanu-blue uppercase font-bold tracking-wider">Total Items</p>
-                                            <p className="text-6xl font-light text-nuuanu-blue">{shippingEntries.length}</p>
-                                        </div>
-                                        <div className="bg-nuuanu-blue-soft p-12 border-2 border-nuuanu-blue-light shadow-sm text-center space-y-4 rounded-xl">
-                                            <p className="text-[11px] text-nuuanu-blue uppercase font-bold tracking-wider">Unique Influencers</p>
-                                            <p className="text-6xl font-light text-nuuanu-blue">{new Set(shippingEntries.map(s => s.instagramId)).size}</p>
-                                        </div>
-                                        <div className="bg-nuuanu-blue-soft p-12 border-2 border-nuuanu-blue-light shadow-sm text-center space-y-4 rounded-xl">
-                                            <p className="text-[11px] text-nuuanu-blue uppercase font-bold tracking-wider">Unused Codes</p>
-                                            <p className="text-6xl font-light text-nuuanu-blue">
-                                                {Math.max(0, accessCodes.length - new Set(shippingEntries.map(s => s.usedCode).filter(Boolean)).size)}
-                                            </p>
-                                        </div>
-                                        <div className="bg-nuuanu-blue-soft p-12 border-2 border-nuuanu-blue-light shadow-sm text-center space-y-4 rounded-xl">
-                                            <p className="text-[11px] text-nuuanu-blue uppercase font-bold tracking-wider">Completion</p>
-                                            <p className="text-6xl font-light text-nuuanu-blue">{shippingEntries.length ? Math.round((shippingEntries.filter(s => s.status === '배송완료').length / shippingEntries.length) * 100) : 0}%</p>
-                                        </div>
-                                    </div>
-
-                                    {/* 1. Inventory & Order Status Board */}
-                                    <div className="bg-white p-10 border-2 shadow-sm rounded-xl space-y-8">
-                                        <div className="border-b pb-6 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
-                                            <div>
-                                                <h3 className="text-[15px] font-bold uppercase tracking-wider text-black">Inventory & Order Board (재고 / 주문 현황 보드)</h3>
-                                                <p className="text-[11px] text-gray-400 uppercase tracking-wide mt-1">Real-time product stock status mapped to influencer selection history</p>
-                                            </div>
-                                        </div>
-                                        <div className="overflow-x-auto">
-                                            <table className="w-full text-left text-sm border-collapse">
-                                                <thead>
-                                                    <tr className="bg-gray-50 border-b border-gray-100 text-[10px] uppercase font-bold tracking-wider text-gray-500">
-                                                        <th className="p-4">Product Name (제품명)</th>
-                                                        <th className="p-4">Category (카테고리)</th>
-                                                        <th className="p-4 text-center">Size (사이즈)</th>
-                                                        <th className="p-4 text-center">Initial Stock (초기 재고)</th>
-                                                        <th className="p-4 text-center">Current Stock (현재 재고)</th>
-                                                        <th className="p-4 text-center">Cumulative Orders (누적 주문)</th>
-                                                        <th className="p-4 text-center">Stock Level (재고율)</th>
-                                                        <th className="p-4 text-center">Status (상태)</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="divide-y divide-gray-100 text-xs">
-                                                    {productsList.length === 0 ? (
-                                                        <tr>
-                                                            <td colSpan="8" className="p-12 text-center text-gray-400 uppercase font-bold tracking-wider">No products available in database</td>
-                                                        </tr>
-                                                    ) : (
-                                                        productsList.flatMap(p => {
-                                                            return p.options.map((sz, szIdx) => {
-                                                                const sizeKey = sz.trim();
-                                                                const initStock = (p.initialInventory && p.initialInventory[sizeKey] !== undefined) ? Number(p.initialInventory[sizeKey]) : 10;
-                                                                const currStock = (p.inventory && p.inventory[sizeKey] !== undefined) ? Number(p.inventory[sizeKey]) : 10;
-                                                                
-                                                                const ordersCount = shippingEntries.filter(e => 
-                                                                    e.productName && e.productName.trim().toLowerCase() === p.name.trim().toLowerCase() && 
-                                                                    e.size && e.size.trim().toLowerCase() === sizeKey.toLowerCase()
-                                                                ).length;
-
-                                                                const stockPercent = initStock > 0 ? Math.round((currStock / initStock) * 100) : 0;
-                                                                const catLabel = (p.subCollection === 'underwear') ? subCollectionNameUnderwear : subCollectionNameMain;
-
-                                                                return (
-                                                                    <tr key={`${p.id}-${sizeKey}`} className="hover:bg-gray-50/50 transition-colors">
-                                                                        {szIdx === 0 ? (
-                                                                            <td className="p-4 font-bold border-r border-gray-100 uppercase" rowSpan={p.options.length}>
-                                                                                <div className="flex items-center space-x-3">
-                                                                                    {p.images && p.images[0] && (
-                                                                                        <img src={p.images[0]} className="w-8 h-10 object-cover border" />
-                                                                                    )}
-                                                                                    <span>{p.name}</span>
-                                                                                </div>
-                                                                            </td>
-                                                                        ) : null}
-                                                                        {szIdx === 0 ? (
-                                                                            <td className="p-4 font-medium text-gray-600 uppercase" rowSpan={p.options.length}>
-                                                                                {catLabel}
-                                                                            </td>
-                                                                        ) : null}
-                                                                        <td className="p-4 text-center font-bold text-black uppercase border-l border-gray-50">{sizeKey}</td>
-                                                                        <td className="p-4 text-center font-mono text-gray-500">{initStock}</td>
-                                                                        <td className="p-4 text-center font-mono font-bold text-black">{currStock}</td>
-                                                                        <td className="p-4 text-center font-mono text-blue-600 font-bold bg-blue-50/30">{ordersCount}</td>
-                                                                        <td className="p-4">
-                                                                            <div className="flex items-center justify-center space-x-2">
-                                                                                <div className="w-16 bg-gray-100 h-1.5 rounded-full overflow-hidden">
-                                                                                    <div 
-                                                                                        className={`h-full ${currStock <= 0 ? 'bg-red-500' : currStock < 3 ? 'bg-orange-400' : 'bg-green-500'}`} 
-                                                                                        style={{ width: `${Math.min(100, stockPercent)}%` }}
-                                                                                    />
-                                                                                </div>
-                                                                                <span className="text-[9px] font-mono font-bold text-gray-500">{stockPercent}%</span>
-                                                                            </div>
-                                                                        </td>
-                                                                        <td className="p-4 text-center">
-                                                                            {currStock <= 0 ? (
-                                                                                <span className="px-2 py-0.5 text-[9px] font-bold uppercase bg-red-100 text-red-700 rounded-full">SOLD OUT (품절)</span>
-                                                                            ) : currStock < 3 ? (
-                                                                                <span className="px-2 py-0.5 text-[9px] font-bold uppercase bg-orange-100 text-orange-700 rounded-full">LOW STOCK</span>
-                                                                            ) : (
-                                                                                <span className="px-2 py-0.5 text-[9px] font-bold uppercase bg-green-100 text-green-700 rounded-full">IN STOCK</span>
-                                                                            )}
-                                                                        </td>
-                                                                    </tr>
-                                                                );
-                                                            });
-                                                        })
-                                                    )}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </div>
-
-                                    {/* 2. Influencer Order Tracker */}
+                                    {/* 1. [최상단 배치] Influencer Order Tracker */}
                                     <div className="bg-white p-10 border-2 shadow-sm rounded-xl space-y-10">
                                         <div>
                                             <h3 className="text-[15px] font-bold uppercase tracking-wider text-black">Influencer Order Tracker (인플루언서별 주문 추적)</h3>
@@ -1317,9 +1225,29 @@
                                                                     <div className="space-y-3 pt-2">
                                                                         {sizeOrders.map((ord, oidx) => (
                                                                             <div key={oidx} className="flex flex-col bg-white border p-3 shadow-sm space-y-1">
-                                                                                <div className="flex justify-between items-center">
-                                                                                    <span className="text-[11px] font-bold text-black uppercase">@{ord.instagramId}</span>
-                                                                                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded ${ord.status === '배송완료' ? 'bg-green-50 text-green-700' : 'bg-orange-50 text-orange-700'}`}>{ord.status}</span>
+                                                                                <div className="flex justify-between items-center gap-2">
+                                                                                    <span className="text-[11px] font-bold text-black uppercase">
+                                                                                        <a 
+                                                                                            href={`https://www.instagram.com/${cleanInstaId(ord.instagramId)}`} 
+                                                                                            target="_blank" 
+                                                                                            rel="noopener noreferrer" 
+                                                                                            className="hover:underline text-black"
+                                                                                        >
+                                                                                            {cleanInstaId(ord.instagramId)}
+                                                                                        </a>
+                                                                                    </span>
+                                                                                    <select 
+                                                                                        className={`text-[10px] px-1.5 py-0.5 border font-bold rounded cursor-pointer ${getStatusColorClass(ord.status)}`}
+                                                                                        value={ord.status} 
+                                                                                        onChange={val => {
+                                                                                            const next = shippingEntries.map(x => x.id === ord.id ? {...x, status: val.target.value} : x);
+                                                                                            handleUpdate({ shippingEntries: next });
+                                                                                        }}
+                                                                                    >
+                                                                                        <option value="준비중">준비중</option>
+                                                                                        <option value="배송완료">배송완료</option>
+                                                                                        <option value="보류">보류</option>
+                                                                                    </select>
                                                                                 </div>
                                                                                 <div className="text-[10px] text-grey-medium flex justify-between">
                                                                                     <span>{ord.name}</span>
@@ -1337,6 +1265,129 @@
                                         ) : (
                                             <div className="py-12 text-center text-gray-400 uppercase text-xs">Please add products to view influencer orders mapping.</div>
                                         )}
+                                    </div>
+
+                                    {/* 2. KPI summary stats cards */}
+                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+                                        <div className="bg-nuuanu-blue-soft p-12 border-2 border-nuuanu-blue-light shadow-sm text-center space-y-4 rounded-xl">
+                                            <p className="text-[11px] text-nuuanu-blue uppercase font-bold tracking-wider">Total Items</p>
+                                            <p className="text-6xl font-light text-nuuanu-blue">{shippingEntries.length}</p>
+                                        </div>
+                                        <div className="bg-nuuanu-blue-soft p-12 border-2 border-nuuanu-blue-light shadow-sm text-center space-y-4 rounded-xl">
+                                            <p className="text-[11px] text-nuuanu-blue uppercase font-bold tracking-wider">Unique Influencers</p>
+                                            <p className="text-6xl font-light text-nuuanu-blue">{new Set(shippingEntries.map(s => s.instagramId)).size}</p>
+                                        </div>
+                                        <div className="bg-nuuanu-blue-soft p-12 border-2 border-nuuanu-blue-light shadow-sm text-center space-y-4 rounded-xl">
+                                            <p className="text-[11px] text-nuuanu-blue uppercase font-bold tracking-wider">Unused Codes</p>
+                                            <p className="text-6xl font-light text-nuuanu-blue">
+                                                {Math.max(0, accessCodes.length - new Set(shippingEntries.map(s => s.usedCode).filter(Boolean)).size)}
+                                            </p>
+                                        </div>
+                                        <div className="bg-nuuanu-blue-soft p-12 border-2 border-nuuanu-blue-light shadow-sm text-center space-y-4 rounded-xl">
+                                            <p className="text-[11px] text-nuuanu-blue uppercase font-bold tracking-wider">Completion</p>
+                                            <p className="text-6xl font-light text-nuuanu-blue">{shippingEntries.length ? Math.round((shippingEntries.filter(s => s.status === '배송완료').length / shippingEntries.length) * 100) : 0}%</p>
+                                        </div>
+                                    </div>
+
+                                    {/* 3. Inventory & Order Board */}
+                                    <div className="bg-white p-10 border-2 shadow-sm rounded-xl space-y-8">
+                                        <div className="border-b pb-6 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+                                            <div>
+                                                <h3 className="text-[15px] font-bold uppercase tracking-wider text-black">Inventory & Order Board (재고 / 주문 현황 보드)</h3>
+                                                <p className="text-[11px] text-gray-400 uppercase tracking-wide mt-1">Real-time product stock status mapped to influencer selection history</p>
+                                            </div>
+                                        </div>
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-left text-sm border-collapse">
+                                                <thead>
+                                                    <tr className="bg-gray-50 border-b border-gray-100 text-[10px] uppercase font-bold tracking-wider text-gray-500">
+                                                        <th className="p-4">Product Name (제품명)</th>
+                                                        <th className="p-4">Category (카테고리)</th>
+                                                        <th className="p-4 text-center">Size (사이즈)</th>
+                                                        <th className="p-4 text-center">Initial Stock (초기 재고)</th>
+                                                        <th className="p-4 text-center">Current Stock (현재 재고)</th>
+                                                        <th className="p-4 text-center">Cumulative Orders (누적 주문)</th>
+                                                        <th className="p-4 text-center">Stock Level (재고율)</th>
+                                                        <th className="p-4 text-center">Display Status</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-gray-100 text-xs">
+                                                    {productsList.length === 0 ? (
+                                                        <tr>
+                                                            <td colSpan="8" className="p-12 text-center text-gray-400 uppercase font-bold tracking-wider">No products available in database</td>
+                                                        </tr>
+                                                    ) : (
+                                                        productsList.flatMap(p => {
+                                                            return p.options.map((sz, szIdx) => {
+                                                                const sizeKey = sz.trim();
+                                                                const initStock = (p.initialInventory && p.initialInventory[sizeKey] !== undefined) ? Number(p.initialInventory[sizeKey]) : 10;
+                                                                const currStock = (p.inventory && p.inventory[sizeKey] !== undefined) ? Number(p.inventory[sizeKey]) : 10;
+                                                                
+                                                                const ordersCount = shippingEntries.filter(e => 
+                                                                    e.productName && e.productName.trim().toLowerCase() === p.name.trim().toLowerCase() && 
+                                                                    e.size && e.size.trim().toLowerCase() === sizeKey.toLowerCase()
+                                                                ).length;
+
+                                                                const stockPercent = initStock > 0 ? Math.round((currStock / initStock) * 100) : 0;
+                                                                const catLabel = (p.subCollection === 'underwear') ? subCollectionNameUnderwear : subCollectionNameMain;
+                                                                const isSizeHidden = (p.isHidden && p.isHidden[sizeKey] === true);
+
+                                                                return (
+                                                                    <tr key={`${p.id}-${sizeKey}`} className="hover:bg-gray-50/50 transition-colors">
+                                                                        {szIdx === 0 ? (
+                                                                            <td className="p-4 font-bold border-r border-gray-100 uppercase" rowSpan={p.options.length}>
+                                                                                <div className="flex items-center space-x-3">
+                                                                                    {p.images && p.images[0] && (
+                                                                                        <img src={p.images[0]} className="w-8 h-10 object-cover border" />
+                                                                                    )}
+                                                                                    <span>{p.name}</span>
+                                                                                </div>
+                                                                            </td>
+                                                                        ) : null}
+                                                                        {szIdx === 0 ? (
+                                                                            <td className="p-4 font-medium text-gray-600 uppercase" rowSpan={p.options.length}>
+                                                                                {catLabel}
+                                                                            </td>
+                                                                        ) : null}
+                                                                        <td className="p-4 text-center font-bold text-black uppercase border-l border-gray-50">{sizeKey}</td>
+                                                                        <td className="p-4 text-center font-mono text-gray-500">{initStock}</td>
+                                                                        <td className="p-4 text-center font-mono font-bold text-black">{currStock}</td>
+                                                                        <td className="p-4 text-center font-mono text-blue-600 font-bold bg-blue-50/30">{ordersCount}</td>
+                                                                        <td className="p-4">
+                                                                            <div className="flex items-center justify-center space-x-2">
+                                                                                <div className="w-16 bg-gray-100 h-1.5 rounded-full overflow-hidden">
+                                                                                    <div 
+                                                                                        className={`h-full ${currStock <= 0 ? 'bg-red-500' : currStock < 3 ? 'bg-orange-400' : 'bg-green-500'}`} 
+                                                                                        style={{ width: `${Math.min(100, stockPercent)}%` }}
+                                                                                    />
+                                                                                </div>
+                                                                                <span className="text-[9px] font-mono font-bold text-gray-500">{stockPercent}%</span>
+                                                                            </div>
+                                                                        </td>
+                                                                        <td className="p-4 text-center">
+                                                                            <button 
+                                                                                onClick={() => {
+                                                                                    const nextIsHidden = { ...(p.isHidden || {}) };
+                                                                                    nextIsHidden[sizeKey] = !nextIsHidden[sizeKey];
+                                                                                    handleUpdate({
+                                                                                        products: collection.products.map(x => x.id === p.id ? { ...x, isHidden: nextIsHidden } : x)
+                                                                                    });
+                                                                                }}
+                                                                                className={`px-3 py-1 text-[11px] font-bold uppercase transition-colors border text-center rounded whitespace-nowrap ${
+                                                                                    !isSizeHidden ? 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100' : 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'
+                                                                                }`}
+                                                                            >
+                                                                                {!isSizeHidden ? 'Active (노출)' : 'Hidden (숨김)'}
+                                                                            </button>
+                                                                        </td>
+                                                                    </tr>
+                                                                );
+                                                            });
+                                                        })
+                                                    )}
+                                                </tbody>
+                                            </table>
+                                        </div>
                                     </div>
                                 </div>
                             );
@@ -1486,11 +1537,13 @@
 
             const submit = () => { 
                 if(!formData.instagramId || !formData.name || !formData.phone || !formData.address || !formData.agreed) { alert('Check required fields'); return; } 
+                const cleanedInstaId = cleanInstaId(formData.instagramId);
                 onSubmission(cart.map(item => ({ 
                     id: generateId(), 
                     status: '준비중', 
                     submitDate: new Date().toISOString().split('T')[0], 
                     ...formData, 
+                    instagramId: cleanedInstaId,
                     productName: item.productName, 
                     size: item.size, 
                     quantity: 1, 
@@ -1517,12 +1570,13 @@
                 if (sub !== activePackage) return false;
                 if (p.isAvailable === false) return false;
                 
-                // If product has sizes, verify there's at least one size with stock > 0
+                // If product has sizes, verify there's at least one size with stock > 0 and not hidden
                 if (p.options && p.options.length > 0) {
                     const hasStock = p.options.some(s => {
                         const sizeKey = s.trim();
                         const stock = (p.inventory && p.inventory[sizeKey] !== undefined) ? Number(p.inventory[sizeKey]) : 10;
-                        return stock > 0;
+                        const isSizeHidden = (p.isHidden && p.isHidden[sizeKey] === true);
+                        return stock > 0 && !isSizeHidden;
                     });
                     if (!hasStock) return false;
                 }
@@ -1748,7 +1802,8 @@
                                             {(selectedProd.options || []).map(s => {
                                                 const sizeKey = s.trim();
                                                 const stock = (selectedProd.inventory && selectedProd.inventory[sizeKey] !== undefined) ? Number(selectedProd.inventory[sizeKey]) : 10;
-                                                if (stock <= 0) return null;
+                                                const isSizeHidden = (selectedProd.isHidden && selectedProd.isHidden[sizeKey] === true);
+                                                if (stock <= 0 || isSizeHidden) return null;
                                                 return (
                                                     <button 
                                                         key={s} 
@@ -1813,7 +1868,15 @@
                                 <h3 className="text-[11px] font-bold uppercase tracking-[0.125em] border-b pb-8 border-gray-200">Shipping Info</h3>
                                 <div className="space-y-10">
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-10">
-                                        <input placeholder="INSTAGRAM (@)" className="w-full border-b border-gray-200 bg-transparent py-5 text-[11px] outline-none uppercase" value={formData.instagramId} onChange={e => setFormData({...formData, instagramId: e.target.value})} />
+                                        <input 
+                                            placeholder="INSTAGRAM (@)" 
+                                            className="w-full border-b border-gray-200 bg-transparent py-5 text-[11px] outline-none uppercase" 
+                                            value={formData.instagramId} 
+                                            onChange={e => {
+                                                const cleaned = e.target.value.replace(/@/g, '').trim();
+                                                setFormData({...formData, instagramId: cleaned});
+                                            }} 
+                                        />
                                         <input placeholder="NAME" className="w-full border-b border-gray-200 bg-transparent py-5 text-[11px] outline-none uppercase" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
                                     </div>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-10">
