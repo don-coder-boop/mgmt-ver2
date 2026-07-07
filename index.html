@@ -1653,7 +1653,13 @@
             const [lookIdx, setLookIdx] = useState(0);
             const [detailImgIdx, setDetailImgIdx] = useState(0);
             const [submitting, setSubmitting] = useState(false);
-            const [formData, setFormData] = useState({ instagramId: '', name: '', phone: '', address: '', message: '', agreed: false });
+            const [formData, setFormData] = useState({ instagramId: (influencerInfo && influencerInfo.instagramId) || '', name: '', phone: '', address: '', message: '', agreed: false });
+
+            useEffect(() => {
+                if (influencerInfo && influencerInfo.instagramId) {
+                    setFormData(f => ({ ...f, instagramId: influencerInfo.instagramId }));
+                }
+            }, [influencerInfo && influencerInfo.instagramId]);
             const touchStartX = useRef(null);
             const scrollRef = useRef(null);
 
@@ -1958,7 +1964,7 @@
                                     <section className="space-y-6 border-t pt-10">
                                         <h3 className="text-[13px] font-bold uppercase tracking-[0.1em]">Shipping Information</h3>
                                         <div className="space-y-5">
-                                            <input type="text" placeholder="INSTAGRAM ID *" value={formData.instagramId} onChange={e => setFormData({...formData, instagramId: e.target.value})} className="w-full border-b-2 py-3.5 text-[14px] outline-none focus:border-black uppercase" />
+                                            <input type="text" placeholder="INSTAGRAM ID *" value={formData.instagramId} disabled className="w-full border-b-2 py-3.5 text-[14px] outline-none uppercase bg-gray-50 text-grey-medium cursor-not-allowed" />
                                             <input type="text" placeholder="이름 *" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full border-b-2 py-3.5 text-[14px] outline-none focus:border-black" />
                                             <input type="tel" placeholder="전화번호 *" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} className="w-full border-b-2 py-3.5 text-[14px] outline-none focus:border-black" />
                                             <input type="text" placeholder="주소 (우편번호 포함) *" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} className="w-full border-b-2 py-3.5 text-[14px] outline-none focus:border-black" />
@@ -2079,6 +2085,7 @@
             const [activeSubView, setActiveSubView] = useState('settings');
             const [cart, setCart] = useState([]);
             const [accessCodeInput, setAccessCodeInput] = useState('');
+            const [loginInstagramId, setLoginInstagramId] = useState('');
             const [isAdminMode, setIsAdminMode] = useState(false);
             const [adminEmail, setAdminEmail] = useState('');
             const [adminPw, setAdminPw] = useState('');
@@ -2114,10 +2121,10 @@
                         if (t.claims.role === 'admin') {
                             setRole('admin');
                             setView(v => (v === 'login' ? 'select_collection' : v));
-                        } else if (t.claims.role === 'influencer' && t.claims.collectionId && t.claims.code) {
-                            // 재방문 시 코드 유효성 + 최신 사용량 재조회
+                        } else if (t.claims.role === 'influencer' && t.claims.collectionId && t.claims.code && t.claims.instagramId) {
+                            // 재방문 시 코드 유효성 + 최신 사용량 재조회 (본인 인스타 아이디 기준)
                             try {
-                                const res = await callVerifyAccessCode({ code: t.claims.code });
+                                const res = await callVerifyAccessCode({ code: t.claims.code, instagramId: t.claims.instagramId });
                                 await user.getIdToken(true);
                                 setInfluencerInfo(res.data);
                                 setRole('influencer');
@@ -2125,6 +2132,9 @@
                             } catch (e) {
                                 await signOut(auth);
                             }
+                        } else if (t.claims.role === 'influencer') {
+                            // 이전 버전(인스타 아이디 claim 없음)으로 로그인된 세션 — 재로그인 유도
+                            await signOut(auth);
                         }
                     } catch (e) {
                         console.error(e);
@@ -2186,18 +2196,23 @@
             // ── Login handlers ──────────────────────────────────────────
             const handleInfluencerLogin = async () => {
                 const code = accessCodeInput.trim();
-                if (!code || isBusy) return;
+                const instagramId = cleanInstaId(loginInstagramId).trim();
+                if (!code || !instagramId || isBusy) {
+                    if (code && !instagramId) notify('인스타그램 아이디를 입력해주세요.', 'error');
+                    return;
+                }
                 setIsBusy(true);
                 try {
                     if (auth.currentUser && !auth.currentUser.isAnonymous) await signOut(auth);
                     if (!auth.currentUser) await signInAnonymously(auth);
-                    const res = await callVerifyAccessCode({ code });
+                    const res = await callVerifyAccessCode({ code, instagramId });
                     await auth.currentUser.getIdToken(true);
                     setInfluencerInfo(res.data);
                     setRole('influencer');
                     setCart([]);
                     setView('influencer');
                     setAccessCodeInput('');
+                    setLoginInstagramId('');
                 } catch (err) {
                     console.error(err);
                     notify(friendlyError(err, '유효하지 않은 코드입니다.'), 'error');
@@ -2415,6 +2430,15 @@
                                         onKeyDown={e => { if (e.key === 'Enter') handleInfluencerLogin(); }}
                                         className="w-full border-b-2 py-4 text-center text-[16px] uppercase outline-none focus:border-black"
                                     />
+                                    <input 
+                                        type="text" 
+                                        placeholder="INSTAGRAM ID" 
+                                        value={loginInstagramId}
+                                        onChange={e => setLoginInstagramId(e.target.value)}
+                                        onKeyDown={e => { if (e.key === 'Enter') handleInfluencerLogin(); }}
+                                        className="w-full border-b-2 py-4 text-center text-[16px] outline-none focus:border-black"
+                                    />
+                                    <p className="text-[10px] text-grey-light -mt-4">* 여러 명이 같은 코드를 공유하는 경우, 인스타그램 아이디로 본인의 신청 수량을 구분합니다.</p>
                                     <button 
                                         onClick={handleInfluencerLogin} 
                                         disabled={isBusy}
