@@ -75,9 +75,24 @@
         }
         
         input, textarea, select {
-            border-radius: 0 !important;
+            border-radius: 12px;
             font-family: inherit;
             font-weight: inherit;
+        }
+
+        /* Oval shapes for buttons, select dropdowns, toggles, inputs (except multiline textarea) */
+        button, select {
+            border-radius: 9999px !important;
+        }
+        
+        .rounded-oval {
+            border-radius: 9999px !important;
+        }
+
+        /* Reset wide tracking to normal letter-spacing */
+        .tracking-wider, .tracking-widest, 
+        [class*="tracking-[0.1"], [class*="tracking-[0.2"] {
+            letter-spacing: normal !important;
         }
 
         .text-grey-dark { color: #222222; }
@@ -342,6 +357,49 @@
             return null;
         };
 
+        const MemoCell = ({ value, onSave }) => {
+            const [localVal, setLocalVal] = useState(value || '');
+
+            useEffect(() => {
+                setLocalVal(value || '');
+            }, [value]);
+
+            return (
+                <textarea 
+                    className="w-full h-12 text-[14px] border-2 bg-transparent p-2 focus:bg-white focus:h-24 transition-all outline-none rounded-xl" 
+                    placeholder="..." 
+                    value={localVal} 
+                    onChange={e => setLocalVal(e.target.value)}
+                    onBlur={() => {
+                        if (localVal !== value) {
+                            onSave(localVal);
+                        }
+                    }}
+                />
+            );
+        };
+
+        const EditableCell = ({ value, onSave, className = "" }) => {
+            const [localVal, setLocalVal] = useState(value || '');
+
+            useEffect(() => {
+                setLocalVal(value || '');
+            }, [value]);
+
+            return (
+                <input 
+                    className={className} 
+                    value={localVal} 
+                    onChange={e => setLocalVal(e.target.value)}
+                    onBlur={() => {
+                        if (localVal !== value) {
+                            onSave(localVal);
+                        }
+                    }}
+                />
+            );
+        };
+
         const SyncMonitor = () => (
             <div className="fixed bottom-6 right-6 bg-white border border-gray-100 p-4 shadow-2xl z-50 min-w-[180px] animate-fade-in flex items-center space-x-3">
                 <div className="flex-shrink-0">
@@ -361,6 +419,9 @@
             const [draggedIdx, setDraggedIdx] = useState(null);
             const [showArchived, setShowArchived] = useState(false);
             const [selectedReportProductId, setSelectedReportProductId] = useState('');
+            const [shippingSearchQuery, setShippingSearchQuery] = useState('');
+            const [shippingStatusFilter, setShippingStatusFilter] = useState('All');
+            const [distributionMetric, setDistributionMetric] = useState('items');
 
             const handleDragStart = (e, idx) => {
                 setDraggedIdx(idx);
@@ -492,6 +553,25 @@
                 } else {
                     data = data.filter(e => !e.isArchived);
                 }
+
+                // Apply status filtering
+                if (shippingStatusFilter !== 'All') {
+                    data = data.filter(e => e.status === shippingStatusFilter);
+                }
+
+                // Apply text search filtering
+                if (shippingSearchQuery.trim()) {
+                    const query = shippingSearchQuery.toLowerCase().trim();
+                    data = data.filter(e => 
+                        String(e.instagramId || '').toLowerCase().includes(query) ||
+                        String(e.name || '').toLowerCase().includes(query) ||
+                        String(e.productName || '').toLowerCase().includes(query) ||
+                        String(e.phone || '').toLowerCase().includes(query) ||
+                        String(e.adminMemo || '').toLowerCase().includes(query) ||
+                        String(e.address || '').toLowerCase().includes(query)
+                    );
+                }
+
                 if (!sortConfig.key) return data;
                 return data.sort((a, b) => {
                     const valA = String(a[sortConfig.key] || '').toLowerCase();
@@ -500,11 +580,26 @@
                     if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
                     return 0;
                 });
-            }, [shippingEntries, sortConfig, showArchived]);
+            }, [shippingEntries, sortConfig, showArchived, shippingStatusFilter, shippingSearchQuery]);
 
             const handleBulkStatusChange = (newStatus) => {
                 if (selectedRows.size === 0) return;
-                const next = shippingEntries.map(e => selectedRows.has(e.id) ? { ...e, status: newStatus } : e);
+                const today = new Date();
+                const yyyy = today.getFullYear();
+                const mm = String(today.getMonth() + 1).padStart(2, '0');
+                const dd = String(today.getDate()).padStart(2, '0');
+                const formattedDate = `${yyyy}-${mm}-${dd}`;
+
+                const next = shippingEntries.map(e => {
+                    if (selectedRows.has(e.id)) {
+                        return { 
+                            ...e, 
+                            status: newStatus,
+                            deliveredDate: newStatus === '배송완료' ? formattedDate : (e.deliveredDate || '')
+                        };
+                    }
+                    return e;
+                });
                 handleUpdate({ shippingEntries: next });
                 setSelectedRows(new Set());
             };
@@ -885,11 +980,25 @@
                                             <div className="flex-1 grid gap-4 grid-cols-1 md:grid-cols-5 items-start">
                                                 <div className="space-y-1">
                                                     <label className="text-[10px] uppercase font-bold text-gray-400">Name</label>
-                                                    <input className="w-full border-b py-1 focus:border-black outline-none text-[13px] font-bold" value={p.name} onChange={e => handleUpdate({ products: collection.products.map(x => x.id === p.id ? {...x, name: e.target.value} : x) }, true)} />
+                                                    <EditableCell 
+                                                        className={`w-full border-b py-1 focus:border-black outline-none text-[13px] font-bold ${
+                                                            (collection.products || []).some(other => other.id !== p.id && other.name.trim().toLowerCase() === p.name.trim().toLowerCase()) 
+                                                            ? 'border-red-500 focus:border-red-500 text-red-600' : ''
+                                                        }`} 
+                                                        value={p.name} 
+                                                        onSave={val => handleUpdate({ products: collection.products.map(x => x.id === p.id ? {...x, name: val} : x) }, true)} 
+                                                    />
+                                                    {(collection.products || []).some(other => other.id !== p.id && other.name.trim().toLowerCase() === p.name.trim().toLowerCase()) && (
+                                                        <p className="text-[10px] text-red-500 font-bold mt-1">⚠️ 중복된 상품명입니다.</p>
+                                                    )}
                                                 </div>
                                                 <div className="space-y-1">
                                                     <label className="text-[10px] uppercase font-bold text-gray-400">Price</label>
-                                                    <input className="w-full border-b py-1 focus:border-black outline-none text-[13px]" value={p.price} onChange={e => handleUpdate({ products: collection.products.map(x => x.id === p.id ? {...x, price: e.target.value} : x) }, true)} />
+                                                    <EditableCell 
+                                                        className="w-full border-b py-1 focus:border-black outline-none text-[13px]" 
+                                                        value={p.price} 
+                                                        onSave={val => handleUpdate({ products: collection.products.map(x => x.id === p.id ? {...x, price: val} : x) }, true)} 
+                                                    />
                                                 </div>
                                                 <div className="space-y-1">
                                                     <label className="text-[10px] uppercase font-bold text-gray-400">Sub-Collection Packaging</label>
@@ -986,8 +1095,17 @@
                                                                             onChange={e => {
                                                                                 const nextInv = { ...(p.inventory || {}) };
                                                                                 nextInv[sizeKey] = parseInt(e.target.value) || 0;
+                                                                                const allSoldOut = p.options.every(szOpt => {
+                                                                                    const optKey = szOpt.trim();
+                                                                                    const stockVal = optKey === sizeKey ? (parseInt(e.target.value) || 0) : (nextInv[optKey] !== undefined ? Number(nextInv[optKey]) : 10);
+                                                                                    return stockVal <= 0;
+                                                                                });
                                                                                 handleUpdate({
-                                                                                    products: collection.products.map(x => x.id === p.id ? { ...x, inventory: nextInv } : x)
+                                                                                    products: collection.products.map(x => x.id === p.id ? { 
+                                                                                        ...x, 
+                                                                                        inventory: nextInv,
+                                                                                        isAvailable: allSoldOut ? false : (x.isAvailable !== false)
+                                                                                    } : x)
                                                                                 }, true);
                                                                             }}
                                                                         />
@@ -1007,7 +1125,30 @@
                                                           <button onClick={() => { const ni = [...p.images]; ni.splice(i, 1); handleUpdate({ products: collection.products.map(x => x.id === p.id ? {...x, images: ni} : x) }); }} className="absolute top-1 right-1 bg-white p-1 opacity-0 group-hover:opacity-100 shadow transition-opacity z-10"><Icons.X size={12}/></button>
                                                         </div>
                                                     ))}
-                                                    <label className={`aspect-[2/3] border border-dashed flex items-center justify-center cursor-pointer hover:border-black transition-colors ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}>
+                                                    <label 
+                                                        onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                                                        onDrop={async (e) => {
+                                                            e.preventDefault();
+                                                            e.stopPropagation();
+                                                            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                                                                setIsUploading(true);
+                                                                try {
+                                                                    const uploads = Array.from(e.dataTransfer.files).map(f => uploadToCloudinary(f));
+                                                                    const urls = await Promise.all(uploads);
+                                                                    const updatedProducts = (collection.products || []).map(x => 
+                                                                        x.id === p.id ? { ...x, images: [...(x.images || []), ...urls] } : x
+                                                                    );
+                                                                    handleUpdate({ products: updatedProducts });
+                                                                    notify(`${urls.length} images uploaded`, 'success');
+                                                                } catch (err) {
+                                                                    notify('Upload failed.', 'error');
+                                                                } finally {
+                                                                    setIsUploading(false);
+                                                                }
+                                                            }
+                                                        }}
+                                                        className={`aspect-[2/3] border border-dashed flex items-center justify-center cursor-pointer hover:border-black transition-colors rounded-3xl ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}
+                                                    >
                                                         <Icons.Plus size={16} className={isUploading ? 'animate-spin' : ''} />
                                                         <input type="file" multiple className="hidden" onChange={(e) => handleProductImageUpload(p.id, e)} />
                                                     </label>
@@ -1024,16 +1165,16 @@
                                 <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center border-b pb-8 gap-4">
                                     <div className="flex items-center space-x-6">
                                         <h3 className="text-[15px] font-bold uppercase tracking-[0.1em]">Tracking Table</h3>
-                                        <div className="flex bg-gray-100 rounded p-1 text-xs">
+                                        <div className="flex bg-gray-100 rounded-full p-1 text-xs">
                                             <button 
                                                 onClick={() => { setShowArchived(false); setSelectedRows(new Set()); }} 
-                                                className={`px-4 py-1.5 uppercase font-bold rounded transition-all cursor-pointer ${!showArchived ? 'bg-white text-black shadow-sm' : 'text-gray-400 hover:text-black'}`}
+                                                className={`px-4 py-1.5 uppercase font-bold rounded-full transition-all cursor-pointer ${!showArchived ? 'bg-white text-black shadow-sm' : 'text-gray-400 hover:text-black'}`}
                                             >
                                                 Active
                                             </button>
                                             <button 
                                                 onClick={() => { setShowArchived(true); setSelectedRows(new Set()); }} 
-                                                className={`px-4 py-1.5 uppercase font-bold rounded transition-all cursor-pointer ${showArchived ? 'bg-white text-black shadow-sm' : 'text-gray-400 hover:text-black'}`}
+                                                className={`px-4 py-1.5 uppercase font-bold rounded-full transition-all cursor-pointer ${showArchived ? 'bg-white text-black shadow-sm' : 'text-gray-400 hover:text-black'}`}
                                             >
                                                 Archived
                                             </button>
@@ -1041,11 +1182,11 @@
                                     </div>
                                     <div className="flex flex-wrap items-center gap-4">
                                         {selectedRows.size > 0 && (
-                                            <div className="flex flex-wrap gap-2 bg-gray-50 p-2.5 rounded items-center border">
+                                            <div className="flex flex-wrap gap-2 bg-gray-50 p-2.5 rounded-full items-center border">
                                                 <span className="text-[13px] uppercase font-bold text-grey-medium px-2">{selectedRows.size} selected</span>
-                                                <button onClick={() => handleBulkStatusChange('배송완료')} className="text-[12px] font-bold uppercase bg-black text-white px-4 py-2 hover:bg-black/80 transition-colors">Set Delivered</button>
-                                                <button onClick={() => handleBulkStatusChange('준비중')} className="text-[12px] font-bold uppercase border border-black px-4 py-2 hover:bg-black hover:text-white transition-colors">Set Preparing</button>
-                                                <button onClick={() => handleBulkStatusChange('보류')} className="text-[12px] font-bold uppercase border border-red-500 text-red-500 px-4 py-2 hover:bg-red-500 hover:text-white transition-colors">Set On Hold</button>
+                                                <button onClick={() => handleBulkStatusChange('배송완료')} className="text-[12px] font-bold uppercase bg-green-50 border-2 border-green-500 text-green-600 px-4 py-2 hover:bg-green-100 transition-colors">Set Delivered</button>
+                                                <button onClick={() => handleBulkStatusChange('준비중')} className="text-[12px] font-bold uppercase bg-orange-50 border-2 border-orange-500 text-orange-600 px-4 py-2 hover:bg-orange-100 transition-colors">Set Preparing</button>
+                                                <button onClick={() => handleBulkStatusChange('보류')} className="text-[12px] font-bold uppercase bg-red-50 border-2 border-red-500 text-red-600 px-4 py-2 hover:bg-red-100 transition-colors">Set On Hold</button>
                                                 {showArchived ? (
                                                     <button onClick={() => handleBulkArchive(false)} className="text-[12px] font-bold uppercase bg-blue-600 text-white px-4 py-2 hover:bg-blue-700 transition-colors">Restore Selected</button>
                                                 ) : (
@@ -1056,6 +1197,41 @@
                                         <button onClick={handleExport} className="text-[12px] font-bold uppercase border-2 border-black px-6 py-2.5 hover:bg-black hover:text-white transition-all">
                                             {selectedRows.size > 0 ? `Export ${selectedRows.size} Selected` : 'Export CSV'}
                                         </button>
+                                    </div>
+                                </div>
+
+                                {/* Status & Text Keyword Filters Bar */}
+                                <div className="flex flex-col md:flex-row gap-4 items-center justify-between bg-gray-50/50 p-4 border rounded-3xl">
+                                    <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+                                        <span className="text-xs font-bold uppercase text-gray-400">Status Filter:</span>
+                                        <div className="flex bg-white border rounded-full p-0.5 text-xs">
+                                            {['All', '준비중', '배송완료', '보류'].map(st => (
+                                                <button
+                                                    key={st}
+                                                    onClick={() => { setShippingStatusFilter(st); setSelectedRows(new Set()); }}
+                                                    className={`px-3 py-1.5 uppercase font-bold rounded-full transition-all cursor-pointer ${shippingStatusFilter === st ? 'bg-black text-white' : 'text-gray-400 hover:text-black'}`}
+                                                >
+                                                    {st}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2 w-full md:w-80">
+                                        <span className="text-xs font-bold uppercase text-gray-400 whitespace-nowrap">Search:</span>
+                                        <div className="relative w-full">
+                                            <input 
+                                                type="text" 
+                                                placeholder="Insta ID, Name, Product..." 
+                                                value={shippingSearchQuery} 
+                                                onChange={e => { setShippingSearchQuery(e.target.value); setSelectedRows(new Set()); }}
+                                                className="w-full bg-white border px-4 py-2 text-xs rounded-full outline-none focus:border-black"
+                                            />
+                                            {shippingSearchQuery && (
+                                                <button onClick={() => setShippingSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-black">
+                                                    <Icons.X size={14} />
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                                 {shippingEntries.length === 0 ? (
@@ -1071,13 +1247,13 @@
                                                     {[
                                                         { key: 'status', label: 'Status' },
                                                         { key: 'submitDate', label: 'Date' },
+                                                        { key: 'deliveredDate', label: 'Delivered Date' },
                                                         { key: 'instagramId', label: 'Insta ID' },
                                                         { key: 'name', label: 'Name' },
                                                         { key: 'phone', label: 'Phone' },
                                                         { key: 'address', label: 'Address' },
                                                         { key: 'productName', label: 'Product' },
                                                         { key: 'size', label: 'Size' },
-                                                        { key: 'subCollection', label: 'Category' },
                                                         { key: 'adminMemo', label: 'Memo' }
                                                     ].map(col => (
                                                         <th key={col.key} className={`p-6 cursor-pointer hover:text-black group select-none whitespace-nowrap`} onClick={() => handleSort(col.key)}>
@@ -1096,13 +1272,33 @@
                                                             <input type="checkbox" className="w-4 h-4" checked={selectedRows.has(e.id)} onChange={() => toggleRow(e.id)} />
                                                         </td>
                                                         <td className="p-6">
-                                                            <select className={`text-[12px] px-3 py-2 border-2 font-bold uppercase bg-white ${getStatusColorClass(e.status)}`} value={e.status} onChange={val => handleUpdate({ shippingEntries: shippingEntries.map(x => x.id === e.id ? {...x, status: val.target.value} : x) })}>
+                                                            <select 
+                                                                className={`text-[12px] px-3 py-2 border-2 font-bold uppercase bg-white rounded-full ${getStatusColorClass(e.status)}`} 
+                                                                value={e.status} 
+                                                                onChange={val => {
+                                                                    const nextStatus = val.target.value;
+                                                                    const today = new Date();
+                                                                    const yyyy = today.getFullYear();
+                                                                    const mm = String(today.getMonth() + 1).padStart(2, '0');
+                                                                    const dd = String(today.getDate()).padStart(2, '0');
+                                                                    const formattedDate = `${yyyy}-${mm}-${dd}`;
+                                                                    
+                                                                    handleUpdate({ 
+                                                                        shippingEntries: shippingEntries.map(x => x.id === e.id ? {
+                                                                            ...x, 
+                                                                            status: nextStatus,
+                                                                            deliveredDate: nextStatus === '배송완료' ? formattedDate : (x.deliveredDate || '')
+                                                                        } : x) 
+                                                                    });
+                                                                }}
+                                                            >
                                                                 <option value="준비중">준비중</option>
                                                                 <option value="배송완료">배송완료</option>
                                                                 <option value="보류">보류</option>
                                                             </select>
                                                         </td>
                                                         <td className="p-6 text-grey-medium font-mono text-[14px]">{e.submitDate}</td>
+                                                        <td className="p-6 font-medium text-[14px] text-grey-medium font-mono">{e.deliveredDate || '-'}</td>
                                                         <td className="p-6 font-bold uppercase">
                                                             <a 
                                                                 href={`https://www.instagram.com/${cleanInstaId(e.instagramId)}`} 
@@ -1117,18 +1313,24 @@
                                                         <td className="p-6 truncate-custom">{truncateText(e.phone, 13)}</td>
                                                         <td className="p-6 truncate-custom" title={e.address}>{truncateText(e.address, 20)}</td>
                                                         <td className="p-6">
-                                                            <input className="w-full bg-transparent border-b-2 border-transparent focus:border-black outline-none" value={e.productName} onChange={v => handleUpdate({ shippingEntries: shippingEntries.map(x => x.id === e.id ? {...x, productName: v.target.value} : x) }, true)} />
+                                                            <EditableCell 
+                                                                className="w-full bg-transparent border-b-2 border-transparent focus:border-black outline-none font-bold" 
+                                                                value={e.productName} 
+                                                                onSave={val => handleUpdate({ shippingEntries: shippingEntries.map(x => x.id === e.id ? {...x, productName: val} : x) }, true)} 
+                                                            />
                                                         </td>
                                                         <td className="p-6">
-                                                            <input className="w-full bg-transparent border-b-2 border-transparent focus:border-black outline-none uppercase" value={e.size} onChange={v => handleUpdate({ shippingEntries: shippingEntries.map(x => x.id === e.id ? {...x, size: v.target.value} : x) }, true)} />
-                                                        </td>
-                                                        <td className="p-6 font-bold uppercase text-[12px]">
-                                                            <span className={`px-3 py-1 rounded-full ${e.subCollection === 'underwear' ? 'bg-purple-50 text-purple-600' : 'bg-blue-50 text-blue-600'}`}>
-                                                                {e.subCollection === 'underwear' ? subCollectionNameUnderwear : subCollectionNameMain}
-                                                            </span>
+                                                            <EditableCell 
+                                                                className="w-full bg-transparent border-b-2 border-transparent focus:border-black outline-none font-bold uppercase" 
+                                                                value={e.size} 
+                                                                onSave={val => handleUpdate({ shippingEntries: shippingEntries.map(x => x.id === e.id ? {...x, size: val} : x) }, true)} 
+                                                            />
                                                         </td>
                                                         <td className="p-6">
-                                                            <textarea className="w-full h-12 text-[14px] border-2 bg-transparent p-2 focus:bg-white focus:h-24 transition-all outline-none" placeholder="..." value={e.adminMemo || ''} onChange={v => handleUpdate({ shippingEntries: shippingEntries.map(x => x.id === e.id ? {...x, adminMemo: v.target.value} : x) }, true)} />
+                                                            <MemoCell 
+                                                                value={e.adminMemo} 
+                                                                onSave={val => handleUpdate({ shippingEntries: shippingEntries.map(x => x.id === e.id ? {...x, adminMemo: val} : x) }, true)} 
+                                                            />
                                                         </td>
                                                         <td className="p-6 text-right">
                                                             <div className="flex justify-end space-x-3">
@@ -1267,25 +1469,311 @@
                                         )}
                                     </div>
 
-                                    {/* 2. KPI summary stats cards */}
-                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-                                        <div className="bg-nuuanu-blue-soft p-12 border-2 border-nuuanu-blue-light shadow-sm text-center space-y-4 rounded-xl">
-                                            <p className="text-[11px] text-nuuanu-blue uppercase font-bold tracking-wider">Total Items</p>
-                                            <p className="text-6xl font-light text-nuuanu-blue">{shippingEntries.length}</p>
+                                    {/* 2. Sleek Metrics & Custom Visual Charts */}
+                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                                        <div className="bg-gray-50/50 p-6 border rounded-3xl space-y-2">
+                                            <p className="text-[10px] text-gray-400 uppercase font-bold tracking-wider">Total Items (전체 주문 건수)</p>
+                                            <p className="text-3xl font-bold text-black">{shippingEntries.length}</p>
                                         </div>
-                                        <div className="bg-nuuanu-blue-soft p-12 border-2 border-nuuanu-blue-light shadow-sm text-center space-y-4 rounded-xl">
-                                            <p className="text-[11px] text-nuuanu-blue uppercase font-bold tracking-wider">Unique Influencers</p>
-                                            <p className="text-6xl font-light text-nuuanu-blue">{new Set(shippingEntries.map(s => s.instagramId)).size}</p>
+                                        <div className="bg-gray-50/50 p-6 border rounded-3xl space-y-2">
+                                            <p className="text-[10px] text-gray-400 uppercase font-bold tracking-wider">Unique Influencers (인플루언서 수)</p>
+                                            <p className="text-3xl font-bold text-black">{new Set(shippingEntries.map(s => s.instagramId)).size}</p>
                                         </div>
-                                        <div className="bg-nuuanu-blue-soft p-12 border-2 border-nuuanu-blue-light shadow-sm text-center space-y-4 rounded-xl">
-                                            <p className="text-[11px] text-nuuanu-blue uppercase font-bold tracking-wider">Unused Codes</p>
-                                            <p className="text-6xl font-light text-nuuanu-blue">
+                                        <div className="bg-gray-50/50 p-6 border rounded-3xl space-y-2">
+                                            <p className="text-[10px] text-gray-400 uppercase font-bold tracking-wider">Unused Codes (미사용 코드)</p>
+                                            <p className="text-3xl font-bold text-black">
                                                 {Math.max(0, accessCodes.length - new Set(shippingEntries.map(s => s.usedCode).filter(Boolean)).size)}
                                             </p>
                                         </div>
-                                        <div className="bg-nuuanu-blue-soft p-12 border-2 border-nuuanu-blue-light shadow-sm text-center space-y-4 rounded-xl">
-                                            <p className="text-[11px] text-nuuanu-blue uppercase font-bold tracking-wider">Completion</p>
-                                            <p className="text-6xl font-light text-nuuanu-blue">{shippingEntries.length ? Math.round((shippingEntries.filter(s => s.status === '배송완료').length / shippingEntries.length) * 100) : 0}%</p>
+                                        <div className="bg-gray-50/50 p-6 border rounded-3xl space-y-2">
+                                            <p className="text-[10px] text-gray-400 uppercase font-bold tracking-wider">Completion Rate (배송 완료율)</p>
+                                            <p className="text-3xl font-bold text-green-600">{shippingEntries.length ? Math.round((shippingEntries.filter(s => s.status === '배송완료').length / shippingEntries.length) * 100) : 0}%</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                                        {/* Status Distribution Chart (주문/배송 상태 원형 차트) */}
+                                        <div className="lg:col-span-1 bg-white p-8 border rounded-3xl shadow-sm space-y-6">
+                                            <div className="flex flex-col sm:flex-row lg:flex-col justify-between items-start gap-4 border-b pb-4">
+                                                <div>
+                                                    <h4 className="text-sm font-bold uppercase tracking-wider text-black">Order Status Distribution</h4>
+                                                    <p className="text-[10px] text-gray-400 uppercase tracking-wide mt-1">주문 및 배송 현황</p>
+                                                </div>
+                                                <div className="flex bg-gray-100 rounded-full p-0.5 text-[9px] font-bold w-full sm:w-auto lg:w-full justify-between">
+                                                    <button 
+                                                        onClick={() => setDistributionMetric('items')} 
+                                                        className={`flex-1 text-center px-2.5 py-1.5 rounded-full transition-all uppercase cursor-pointer ${distributionMetric === 'items' ? 'bg-white text-black shadow-sm' : 'text-gray-400 hover:text-black'}`}
+                                                    >
+                                                        By Items (아이템)
+                                                    </button>
+                                                    <button 
+                                                        onClick={() => setDistributionMetric('influencers')} 
+                                                        className={`flex-1 text-center px-2.5 py-1.5 rounded-full transition-all uppercase cursor-pointer ${distributionMetric === 'influencers' ? 'bg-white text-black shadow-sm' : 'text-gray-400 hover:text-black'}`}
+                                                    >
+                                                        By Influencer (인플루언서)
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            
+                                            {(() => {
+                                                const itemCounts = {
+                                                    '준비중': shippingEntries.filter(e => e.status === '준비중').length,
+                                                    '배송완료': shippingEntries.filter(e => e.status === '배송완료').length,
+                                                    '보류': shippingEntries.filter(e => e.status === '보류').length
+                                                };
+                                                const totalItems = itemCounts['준비중'] + itemCounts['배송완료'] + itemCounts['보류'] || 1;
+                                                const pItemPrep = Math.round((itemCounts['준비중'] / totalItems) * 100);
+                                                const pItemDelv = Math.round((itemCounts['배송완료'] / totalItems) * 100);
+                                                const pItemHold = Math.round((itemCounts['보류'] / totalItems) * 100);
+
+                                                const infCounts = {
+                                                    '준비중': new Set(shippingEntries.filter(e => e.status === '준비중').map(e => e.instagramId)).size,
+                                                    '배송완료': new Set(shippingEntries.filter(e => e.status === '배송완료').map(e => e.instagramId)).size,
+                                                    '보류': new Set(shippingEntries.filter(e => e.status === '보류').map(e => e.instagramId)).size
+                                                };
+                                                const totalInfs = infCounts['준비중'] + infCounts['배송완료'] + infCounts['보류'] || 1;
+                                                const pInfPrep = Math.round((infCounts['준비중'] / totalInfs) * 100);
+                                                const pInfDelv = Math.round((infCounts['배송완료'] / totalInfs) * 100);
+                                                const pInfHold = Math.round((infCounts['보류'] / totalInfs) * 100);
+
+                                                const counts = distributionMetric === 'items' ? itemCounts : infCounts;
+                                                const pPrep = distributionMetric === 'items' ? pItemPrep : pInfPrep;
+                                                const pDelv = distributionMetric === 'items' ? pItemDelv : pInfDelv;
+                                                const pHold = distributionMetric === 'items' ? pItemHold : pInfHold;
+
+                                                const totalDisplay = distributionMetric === 'items' 
+                                                    ? shippingEntries.length 
+                                                    : new Set(shippingEntries.map(e => e.instagramId)).size;
+                                                const totalDisplayUnit = distributionMetric === 'items' ? '건' : '명';
+                                                
+                                                return (
+                                                    <div className="flex flex-col items-center gap-6 py-2">
+                                                        {/* Interactive SVG Pie/Donut Chart */}
+                                                        <div className="relative w-40 h-40 flex-shrink-0">
+                                                            <svg className="w-full h-full transform -rotate-90 animate-fade-in" viewBox="0 0 36 36">
+                                                                <circle cx="18" cy="18" r="15.915" fill="none" stroke="#f3f4f6" strokeWidth="3" />
+                                                                
+                                                                {/* 배송완료 - Green (Success) */}
+                                                                <circle 
+                                                                    cx="18" cy="18" r="15.915" fill="none" 
+                                                                    stroke="#22c55e" strokeWidth="3.5" 
+                                                                    strokeDasharray={`${pDelv} ${100 - pDelv}`} 
+                                                                    strokeDashoffset="0"
+                                                                    className="transition-all duration-1000"
+                                                                />
+                                                                
+                                                                {/* 준비중 - Orange (Warning/Pending) */}
+                                                                <circle 
+                                                                    cx="18" cy="18" r="15.915" fill="none" 
+                                                                    stroke="#f97316" strokeWidth="3.5" 
+                                                                    strokeDasharray={`${pPrep} ${100 - pPrep}`} 
+                                                                    strokeDashoffset={-pDelv}
+                                                                    className="transition-all duration-1000"
+                                                                />
+                                                                
+                                                                {/* 보류 - Red (Error/Blocked) */}
+                                                                <circle 
+                                                                    cx="18" cy="18" r="15.915" fill="none" 
+                                                                    stroke="#ef4444" strokeWidth="3.5" 
+                                                                    strokeDasharray={`${pHold} ${100 - pHold}`} 
+                                                                    strokeDashoffset={-(pDelv + pPrep)}
+                                                                    className="transition-all duration-1000"
+                                                                />
+                                                            </svg>
+                                                            <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+                                                                <span className="text-[9px] text-gray-400 uppercase font-bold tracking-wider">
+                                                                    {distributionMetric === 'items' ? 'Total Orders' : 'Unique Infs'}
+                                                                </span>
+                                                                <span className="text-xl font-bold text-black font-mono">
+                                                                    {totalDisplay}{totalDisplayUnit}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                        
+                                                        {/* Legend / Metrics */}
+                                                        <div className="space-y-4 w-full">
+                                                            <div className="flex items-center justify-between border-b pb-2">
+                                                                <div className="flex items-center space-x-2">
+                                                                    <span className="w-2.5 h-2.5 rounded-full bg-green-500 block"></span>
+                                                                    <span className="text-xs font-bold text-gray-600">배송완료 (Delivered)</span>
+                                                                </div>
+                                                                <div className="text-right flex flex-col items-end">
+                                                                    <span className="text-xs font-bold text-green-600 font-mono">
+                                                                        {itemCounts['배송완료']}건 ({pItemDelv}%)
+                                                                    </span>
+                                                                    <span className="text-[10px] text-gray-400 font-mono font-medium">
+                                                                        인플루언서: {infCounts['배송완료']}명 ({pInfDelv}%)
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-center justify-between border-b pb-2">
+                                                                <div className="flex items-center space-x-2">
+                                                                    <span className="w-2.5 h-2.5 rounded-full bg-orange-500 block"></span>
+                                                                    <span className="text-xs font-bold text-gray-600">준비중 (Preparing)</span>
+                                                                </div>
+                                                                <div className="text-right flex flex-col items-end">
+                                                                    <span className="text-xs font-bold text-orange-600 font-mono">
+                                                                        {itemCounts['준비중']}건 ({pItemPrep}%)
+                                                                    </span>
+                                                                    <span className="text-[10px] text-gray-400 font-mono font-medium">
+                                                                        인플루언서: {infCounts['준비중']}명 ({pInfPrep}%)
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-center justify-between pb-2">
+                                                                <div className="flex items-center space-x-2">
+                                                                    <span className="w-2.5 h-2.5 rounded-full bg-red-500 block"></span>
+                                                                    <span className="text-xs font-bold text-gray-600">보류 (On Hold)</span>
+                                                                </div>
+                                                                <div className="text-right flex flex-col items-end">
+                                                                    <span className="text-xs font-bold text-red-600 font-mono">
+                                                                        {itemCounts['보류']}건 ({pItemHold}%)
+                                                                    </span>
+                                                                    <span className="text-[10px] text-gray-400 font-mono font-medium">
+                                                                        인플루언서: {infCounts['보류']}명 ({pInfHold}%)
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })()}
+                                        </div>
+
+                                        {/* Product Order Leaderboard Chart (아이템별 주문 순위 막대 차트 - 컬렉션별 구분 TOP 10) */}
+                                        <div className="lg:col-span-2 bg-white p-8 border rounded-3xl shadow-sm space-y-6">
+                                            <div>
+                                                <h4 className="text-sm font-bold uppercase tracking-wider text-black">Product Order Ranking (아이템별 주문 순위)</h4>
+                                                <p className="text-[10px] text-gray-400 uppercase tracking-wide">TOP 10 order counts segmented by product collection type</p>
+                                            </div>
+                                            
+                                            {(() => {
+                                                const productRankingsMap = {};
+                                                shippingEntries.forEach(e => {
+                                                    if (!e.productName) return;
+                                                    const name = e.productName.trim();
+                                                    if (!productRankingsMap[name]) productRankingsMap[name] = 0;
+                                                    productRankingsMap[name]++;
+                                                });
+                                                
+                                                const allRankings = Object.entries(productRankingsMap).map(([name, count]) => {
+                                                    const matchedProd = productsList.find(p => p.name.trim().toLowerCase() === name.toLowerCase());
+                                                    const imageUrl = matchedProd && matchedProd.images && matchedProd.images[0] ? matchedProd.images[0] : '';
+                                                    const subCollection = matchedProd ? (matchedProd.subCollection || 'main') : 'main';
+                                                    return { name, count, imageUrl, subCollection };
+                                                });
+
+                                                const mainRankings = allRankings
+                                                    .filter(item => item.subCollection === 'main')
+                                                    .sort((a, b) => b.count - a.count);
+
+                                                const underwearRankings = allRankings
+                                                    .filter(item => item.subCollection === 'underwear')
+                                                    .sort((a, b) => b.count - a.count);
+
+                                                const maxMainCount = mainRankings[0] ? mainRankings[0].count : 1;
+                                                const maxUnderwearCount = underwearRankings[0] ? underwearRankings[0].count : 1;
+                                                
+                                                const totalOrders = shippingEntries.length || 1;
+                                                
+                                                if (allRankings.length === 0) {
+                                                    return (
+                                                        <div className="py-24 text-center text-gray-400 text-xs italic uppercase">No ordering metrics recorded yet</div>
+                                                    );
+                                                }
+                                                
+                                                return (
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 divide-y md:divide-y-0 md:divide-x divide-gray-100">
+                                                        {/* Main Collection TOP 10 */}
+                                                        <div className="space-y-4">
+                                                            <div className="flex items-center justify-between border-b pb-2">
+                                                                <h5 className="text-xs font-bold uppercase text-blue-600 tracking-wider">
+                                                                    {subCollectionNameMain} TOP 10
+                                                                </h5>
+                                                                <span className="text-[9px] text-gray-400 font-mono font-bold uppercase">
+                                                                    {mainRankings.length} items
+                                                                </span>
+                                                            </div>
+                                                            {mainRankings.length === 0 ? (
+                                                                <div className="py-12 text-center text-gray-400 text-xs italic">No orders recorded</div>
+                                                            ) : (
+                                                                <div className="space-y-3.5">
+                                                                    {mainRankings.slice(0, 10).map((item, index) => {
+                                                                        const widthPercent = Math.max(8, Math.round((item.count / maxMainCount) * 100));
+                                                                        const sharePercent = Math.round((item.count / totalOrders) * 100);
+                                                                        return (
+                                                                            <div key={index} className="flex items-center space-x-3 group">
+                                                                                <span className="text-[11px] font-bold text-gray-400 w-5 text-center">{index + 1}</span>
+                                                                                {item.imageUrl ? (
+                                                                                    <img src={item.imageUrl} className="w-8 h-10 object-cover border shadow-sm rounded-lg bg-gray-50 flex-shrink-0" />
+                                                                                ) : (
+                                                                                    <div className="w-8 h-10 bg-gray-100 border rounded-lg flex items-center justify-center text-[8px] text-gray-400 flex-shrink-0">IMG</div>
+                                                                                )}
+                                                                                <div className="flex-1 space-y-1 min-w-0">
+                                                                                    <div className="flex justify-between items-center text-xs gap-2">
+                                                                                        <span className="font-bold uppercase text-black truncate flex-1" title={item.name}>{item.name}</span>
+                                                                                        <span className="font-bold text-gray-500 font-mono flex-shrink-0">{item.count}건 ({sharePercent}%)</span>
+                                                                                    </div>
+                                                                                    <div className="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden">
+                                                                                        <div 
+                                                                                            className="bg-blue-600 h-full rounded-full transition-all duration-1000 group-hover:bg-blue-500" 
+                                                                                            style={{ width: `${widthPercent}%` }}
+                                                                                        />
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                            )}
+                                                        </div>
+
+                                                        {/* Underwear Collection TOP 10 */}
+                                                        <div className="space-y-4 md:pl-6 pt-6 md:pt-0">
+                                                            <div className="flex items-center justify-between border-b pb-2">
+                                                                <h5 className="text-xs font-bold uppercase text-purple-600 tracking-wider">
+                                                                    {subCollectionNameUnderwear} TOP 10
+                                                                </h5>
+                                                                <span className="text-[9px] text-gray-400 font-mono font-bold uppercase">
+                                                                    {underwearRankings.length} items
+                                                                </span>
+                                                            </div>
+                                                            {underwearRankings.length === 0 ? (
+                                                                <div className="py-12 text-center text-gray-400 text-xs italic">No orders recorded</div>
+                                                            ) : (
+                                                                <div className="space-y-3.5">
+                                                                    {underwearRankings.slice(0, 10).map((item, index) => {
+                                                                        const widthPercent = Math.max(8, Math.round((item.count / maxUnderwearCount) * 100));
+                                                                        const sharePercent = Math.round((item.count / totalOrders) * 100);
+                                                                        return (
+                                                                            <div key={index} className="flex items-center space-x-3 group">
+                                                                                <span className="text-[11px] font-bold text-gray-400 w-5 text-center">{index + 1}</span>
+                                                                                {item.imageUrl ? (
+                                                                                    <img src={item.imageUrl} className="w-8 h-10 object-cover border shadow-sm rounded-lg bg-gray-50 flex-shrink-0" />
+                                                                                ) : (
+                                                                                    <div className="w-8 h-10 bg-gray-100 border rounded-lg flex items-center justify-center text-[8px] text-gray-400 flex-shrink-0">IMG</div>
+                                                                                )}
+                                                                                <div className="flex-1 space-y-1 min-w-0">
+                                                                                    <div className="flex justify-between items-center text-xs gap-2">
+                                                                                        <span className="font-bold uppercase text-black truncate flex-1" title={item.name}>{item.name}</span>
+                                                                                        <span className="font-bold text-gray-500 font-mono flex-shrink-0">{item.count}건 ({sharePercent}%)</span>
+                                                                                    </div>
+                                                                                    <div className="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden">
+                                                                                        <div 
+                                                                                            className="bg-purple-600 h-full rounded-full transition-all duration-1000 group-hover:bg-purple-500" 
+                                                                                            style={{ width: `${widthPercent}%` }}
+                                                                                        />
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })()}
                                         </div>
                                     </div>
 
@@ -1992,14 +2480,51 @@
                 }
             };
 
+            const cleanAndDiagnoseForFirestore = (val, path = '', visited = new Set()) => {
+                if (val === null || val === undefined) return val;
+                if (typeof val !== 'object' && typeof val !== 'function') {
+                    return val;
+                }
+                if (typeof val === 'function') {
+                    console.warn(`[Firestore Sync Debug] Function removed at: ${path}`);
+                    return null;
+                }
+                if (visited.has(val)) {
+                    console.warn(`[Firestore Sync Debug] Circular reference detected and removed at: ${path}`);
+                    return '[Circular Reference]';
+                }
+                if (val instanceof Node || (typeof val.nodeType === 'number') || val === window || val === document) {
+                    console.warn(`[Firestore Sync Debug] DOM Node detected and removed at: ${path}. Constructor: ${val.constructor?.name || 'unknown'}`);
+                    return `[DOM Node: ${val.constructor?.name || 'Element'}]`;
+                }
+                if (val.nativeEvent || val._reactName || val.target || val.currentTarget) {
+                    console.warn(`[Firestore Sync Debug] React Event detected and removed at: ${path}. Constructor: ${val.constructor?.name || 'SyntheticEvent'}`);
+                    return `[Event: ${val.constructor?.name || 'Event'}]`;
+                }
+                visited.add(val);
+                if (Array.isArray(val)) {
+                    const cleanedArray = val.map((item, index) => 
+                        cleanAndDiagnoseForFirestore(item, path ? `${path}[${index}]` : `[${index}]`, new Set(visited))
+                    );
+                    return cleanedArray;
+                }
+                const cleanedObj = {};
+                for (const key of Object.keys(val)) {
+                    cleanedObj[key] = cleanAndDiagnoseForFirestore(val[key], path ? `${path}.${key}` : key, new Set(visited));
+                }
+                return cleanedObj;
+            };
+
             const updateCollection = async (updated) => {
                 try {
                     const docId = updated.firebaseId;
                     if (!docId) return;
-                    const dataToSave = { ...updated };
+                    const cleanedData = cleanAndDiagnoseForFirestore(updated);
+                    const dataToSave = { ...cleanedData };
                     delete dataToSave.firebaseId;
                     await setDoc(doc(db, 'collections', docId), dataToSave);
                 } catch (err) {
+                    console.error('Firestore Update Failed:', err);
                     notify('Cloud Update Failed', 'error');
                 }
             };
@@ -2027,9 +2552,18 @@
                             const sz = cartItem.size.trim();
                             const currentStock = currentInv[sz] !== undefined ? Number(currentInv[sz]) : 10;
                             currentInv[sz] = Math.max(0, currentStock - 1);
+
+                            // Check if all options are sold out
+                            const allSoldOut = (p.options || []).every(szOpt => {
+                                const optKey = szOpt.trim();
+                                const stockVal = currentInv[optKey] !== undefined ? Number(currentInv[optKey]) : 10;
+                                return stockVal <= 0;
+                            });
+
                             return {
                                 ...p,
-                                inventory: currentInv
+                                inventory: currentInv,
+                                isAvailable: allSoldOut ? false : (p.isAvailable !== false)
                             };
                         }
                         return p;
